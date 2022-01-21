@@ -49,7 +49,7 @@ function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
     function TorchModuleWrapper_pullback(Δ)
         torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype=wrap.dtype, device=wrap.device))
         jlparams_tangents = map(x->x.detach().numpy(), torch_tangent_vals[1])
-        args_tangents = map(x->x.detach().numpy(), torch_tangent_vals[2:end])
+        args_tangents = map(x->reversedims(x.detach().numpy()), torch_tangent_vals[2:end])
         return (Tangent{TorchModuleWrapper}(;torch_stateless_module=NoTangent(),dtype=NoTangent(), device=NoTangent(), params=jlparams_tangents), args_tangents...)
     end
     return reversedims(torch_primal.detach().numpy()), TorchModuleWrapper_pullback

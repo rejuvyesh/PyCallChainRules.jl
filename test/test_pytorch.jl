@@ -21,4 +21,7 @@ grad,  = Zygote.gradient(m->sum(m(x)), linwrap)
 @test grad.params[1] !== nothing
 @test grad.params[2] !== nothing
 
+grad, = Zygote.gradient(z->sum(linwrap(z)), x)
+@test size(grad) == size(x)
+
 #test_rrule(linwrap, x)
