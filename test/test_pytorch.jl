@@ -8,6 +8,7 @@ using ChainRulesCore: NoTangent, AbstractZero
 import Random
 using PyCall
 
+Random.seed!(42)
 ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
 ChainRulesTestUtils.test_approx(::AbstractZero, x::PyObject, msg=""; kwargs...) = @test true
 
@@ -22,7 +23,8 @@ end
 batchsize = 1
 indim = 3
 outdim = 2
-lin = torch.nn.Linear(indim, outdim)
+hiddendim = 4
+lin = torch.nn.Sequential(torch.nn.Linear(indim, hiddendim), torch.nn.ReLU(), torch.nn.Linear(hiddendim, outdim))
 
 linwrap = TorchModuleWrapper(lin)
 
@@ -58,10 +60,9 @@ test_rrule(linwrap, x; check_inferred=false, check_thunked_output_tangent=false,
 #CRTU.test_approx(ad_cotangents[1], fd_cotangents[1])
 
 
-
 # Zygote check
 grad,  = Zygote.gradient(m->sum(m(x)), linwrap)
-@test length(grad.params) == 2
+@test length(grad.params) == length(linwrap.params)
 @test grad.params[1] !== nothing
 @test grad.params[2] !== nothing
 @test size(grad.params[1]) == size(linwrap.params[1])
@@ -74,3 +75,16 @@ grad, = Zygote.gradient(z->sum(linwrap(z)), x)
 nn = Chain(Dense(4, 3), linwrap)
 x2 = randn(Float32, 4, batchsize)
 grad,  = Zygote.gradient(m->sum(m(x2)), nn)
+
+
+model = torch.nn.Sequential(
+          torch.nn.Conv2d(1,2,5),
+          torch.nn.ReLU(),
+          torch.nn.Conv2d(2,6,5),
+          torch.nn.ReLU()
+        )
+modelwrap = TorchModuleWrapper(model)
+
+input = randn(Float32, 12, 12, 1, batchsize)
+output = modelwrap(input)
+test_rrule(modelwrap, input; check_inferred=false, check_thunked_output_tangent=false, atol=1e-2, rtol=1e-2)
