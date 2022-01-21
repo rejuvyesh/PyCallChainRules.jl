@@ -15,11 +15,12 @@ end
 Random.seed!(42)
 ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
 ChainRulesTestUtils.test_approx(::AbstractZero, x::PyObject, msg=""; kwargs...) = @test true
+ChainRulesTestUtils.test_approx(::AbstractZero, x::Tuple{}, msg=""; kwargs...) = @test true
 
 function ChainRulesTestUtils.FiniteDifferences.to_vec(x::TorchModuleWrapper) 
     params_vec, back = ChainRulesTestUtils.FiniteDifferences.to_vec(x.params)
     function TorchModuleWrapper_from_vec(params_vec)
-        TorchModuleWrapper(x.torch_stateless_module, x.dtype, x.device, back(params_vec))
+        TorchModuleWrapper(x.torch_stateless_module, x.dtype, x.device, back(params_vec), x.buffers)
     end
     return params_vec, TorchModuleWrapper_from_vec
 end
