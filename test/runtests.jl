@@ -1,6 +1,7 @@
-using PyCallChainRules
-using Test
+using SafeTestsets
 
-@testset "PyCallChainRules.jl" begin
-    # Write your tests here.
+@safetestset "PyCallChainRules.jl" begin
+    @safetestset "torch" begin
+        include("test_pytorch.jl")
+    end
 end

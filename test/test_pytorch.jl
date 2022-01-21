@@ -3,6 +3,7 @@ using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch
 using Test
 using ChainRulesTestUtils
 using Zygote
+using Flux
 
 batchsize = 1
 indim = 3
@@ -26,4 +27,8 @@ grad,  = Zygote.gradient(m->sum(m(x)), linwrap)
 grad, = Zygote.gradient(z->sum(linwrap(z)), x)
 @test size(grad) == size(x)
 
+# Flux check
+nn = Chain(Dense(4, 3), linwrap)
+x = randn(Float32, 4, batchsize)
+grad,  = Zygote.gradient(m->sum(m(x)), nn)
 #test_rrule(linwrap, x)
