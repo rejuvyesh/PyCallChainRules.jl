@@ -38,6 +38,7 @@ function TorchModuleWrapper(torch_module)
 end
 
 function (wrap::TorchModuleWrapper)(args...)
+    # TODO: handle multiple outputs
     tensor_out = wrap.torch_stateless_module(Tuple(map(x->torch.as_tensor(x).to(device=wrap.device, dtype=wrap.dtype).requires_grad_(true), wrap.params)),
                                             map(x->torch.as_tensor(PyReverseDims(x)).to(dtype=wrap.dtype, device=wrap.device), args)...)
     return reversedims(tensor_out.detach().numpy())
