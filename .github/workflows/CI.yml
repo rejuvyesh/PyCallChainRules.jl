@@ -37,7 +37,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.arch }}
-      - run: python -m pip install setuptools jax torch ninja "git+https://github.com/pytorch/functorch.git@release/torch_1.10_preview"
+      - run: python -m pip install setuptools jax torch ninja 
+      - run: python -m pip install "git+https://github.com/pytorch/functorch.git@release/torch_1.10_preview"
       - uses: actions/cache@v1
         env:
           cache-name: cache-artifacts
