@@ -4,6 +4,11 @@ using Test
 using ChainRulesTestUtils
 using Zygote
 using Flux
+using ChainRulesCore: NoTangent
+import Random
+using PyCall
+ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
+ChainRulesTestUtils.FiniteDifferences.to_vec(x::Ptr{PyCall.PyObject_struct}) = (Bool[], _ -> x)
 
 batchsize = 1
 indim = 3
@@ -15,6 +20,10 @@ linwrap = TorchModuleWrapper(lin)
 x = randn(Float32, indim, batchsize)
 y = linwrap(x)
 @test size(y) == (outdim, batchsize)
+
+# CRTU check TODO
+x = randn(Float32, indim, batchsize)
+# test_rrule(linwrap, x; check_inferred=false)
 
 # Zygote check
 grad,  = Zygote.gradient(m->sum(m(x)), linwrap)
@@ -29,6 +38,7 @@ grad, = Zygote.gradient(z->sum(linwrap(z)), x)
 
 # Flux check
 nn = Chain(Dense(4, 3), linwrap)
-x = randn(Float32, 4, batchsize)
-grad,  = Zygote.gradient(m->sum(m(x)), nn)
-#test_rrule(linwrap, x)
+x2 = randn(Float32, 4, batchsize)
+grad,  = Zygote.gradient(m->sum(m(x2)), nn)
+
+

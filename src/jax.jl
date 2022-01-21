@@ -26,10 +26,12 @@ function (wrap::JaxFunctionWrapper)(args...)
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
+    project = ProjectTo(args)
     jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...)
     function JaxFunctionWrapper_pullback(Δ)
         tangent_vals = mapover(x->reversedims(numpy.array(x)), x-> x isa PyObject,jax_vjpfun(jax.numpy.array(PyReverseDims(Δ))))
-        return (NoTangent(), tangent_vals...)
+
+        return (NoTangent(), project(tangent_vals)...)
     end
     return reversedims(numpy.array(jax_primal)), JaxFunctionWrapper_pullback
 end
