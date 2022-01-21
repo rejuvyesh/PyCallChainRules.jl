@@ -19,6 +19,10 @@ struct TorchModuleWrapper
     params::Tuple
 end
 
+Base.length(f::TorchModuleWrapper) = length(f.params)
+Base.iterate(f::TorchModuleWrapper) = iterate(f.params)
+Base.iterate(f::TorchModuleWrapper, state) = iterate(f.params, state)
+
 function TorchModuleWrapper(torch_module, device)
     pybuiltin("isinstance")(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
     torch_module = torch_module.to(device)
@@ -39,11 +43,11 @@ function (wrap::TorchModuleWrapper)(args...)
     return reversedims(tensor_out.detach().numpy())
 end
 
-function ChainRulesCore.rrule(f::TorchModuleWrapper, args...)
-    torch_primal, torch_vjpfun = functorch.vjp(f.torch_stateless_module, Tuple(map(x->torch.as_tensor(x).to(device=wrap.device, dtype=wrap.dtype).requires_grad_(true), wrap.params)),
+function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
+    torch_primal, torch_vjpfun = functorch.vjp(wrap.torch_stateless_module, Tuple(map(x->torch.as_tensor(x).to(device=wrap.device, dtype=wrap.dtype).requires_grad_(true), wrap.params)),
     map(x->torch.as_tensor(PyReverseDims(x)).to(dtype=wrap.dtype, device=wrap.device).requires_grad_(true), args)...)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype=f.dtype, device=f.device))
+        torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype=wrap.dtype, device=wrap.device))
         jlparams_tangents = map(x->x.detach().numpy(), torch_tangent_vals[1])
         args_tangents = map(x->x.detach().numpy(), torch_tangent_vals[2:end])
         return (Tangent{TorchModuleWrapper}(;torch_stateless_module=NoTangent(),dtype=NoTangent(), device=NoTangent(), params=jlparams_tangents), args_tangents...)
