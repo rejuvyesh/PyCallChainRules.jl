@@ -38,10 +38,19 @@ end
 
 
 function __init__()
-    copy!(jax, pyimport("jax"))
-    copy!(numpy, pyimport("numpy"))
-    copy!(stax, pyimport("jax.example_libraries.stax"))
-    copy!(inspect, pyimport("inspect"))
+    try
+        copy!(jax, pyimport("jax"))
+        copy!(numpy, pyimport("numpy"))
+        copy!(stax, pyimport("jax.example_libraries.stax"))
+        copy!(inspect, pyimport("inspect"))
+    catch err
+        @warn """PyCallChainRules.jl has failed to import jax from Python.
+                 Please make sure these are installed. 
+                 methods of this package.
+        """
+        @debug err        
+        rethrow(err)
+    end
 end
 
 end
