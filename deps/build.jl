@@ -1,6 +1,6 @@
 using PyCall
 
-pydeps = Dict(["torch" => ["--pre", "torch", "-f" ,"https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html"], "jax"=> "jax", "functorch"=>"git+https://github.com/pytorch/functorch.git"])
+pydeps = Dict(["torch" => ["--pre", "torch", "-f" ,"https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html"], "jax"=> "jax[cpu]", "functorch"=>"git+https://github.com/pytorch/functorch.git"])
 for (dep, pip_suffix) in pydeps
     try
         pyimport(dep)
