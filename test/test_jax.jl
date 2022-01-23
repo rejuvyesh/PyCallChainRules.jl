@@ -1,4 +1,4 @@
-using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, reversedims
+using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, reversedims, ispysetup
 
 using Test
 using ChainRulesTestUtils
@@ -6,6 +6,10 @@ using Zygote
 using ChainRulesCore: NoTangent
 using Random
 #using Flux
+
+if !ispysetup[]
+    return
+end
 
 ### !!! Remove this piracy once fixed on CRTU
 ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()

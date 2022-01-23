@@ -1,4 +1,4 @@
-using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch
+using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, ispysetup
 
 using Test
 using ChainRulesTestUtils
@@ -7,6 +7,10 @@ using Flux
 using ChainRulesCore: NoTangent, AbstractZero
 import Random
 using PyCall
+
+if !ispysetup[]
+    return
+end
 
 Random.seed!(42)
 ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
