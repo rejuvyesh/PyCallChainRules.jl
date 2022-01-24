@@ -53,7 +53,7 @@ function __init__()
         """
         @debug err   
         ispysetup[] = false             
-        rethrow(err)
+        #rethrow(err)
     end
 end
 
