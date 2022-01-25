@@ -76,12 +76,12 @@ jobs:
             using Pkg
             Pkg.develop(PackageSpec(path=pwd()))
             Pkg.instantiate()'
-      - run: |
-          julia --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using PyCallChainRules
-            DocMeta.setdocmeta!(PyCallChainRules, :DocTestSetup, :(using PyCallChainRules); recursive=true)
-            doctest(PyCallChainRules)'
+      # - run: |
+      #     julia --project=docs -e '
+      #       using Documenter: DocMeta, doctest
+      #       using PyCallChainRules
+      #       DocMeta.setdocmeta!(PyCallChainRules, :DocTestSetup, :(using PyCallChainRules); recursive=true)
+      #       doctest(PyCallChainRules)'
       - run: julia --project=docs docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
