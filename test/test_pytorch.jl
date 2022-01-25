@@ -1,4 +1,4 @@
-using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, ispysetup
+using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, ispysetup, ReverseDimsArray
 
 using Test
 using ChainRulesTestUtils
@@ -38,8 +38,8 @@ y = linwrap(x)
 @test size(y) == (outdim, batchsize)
 
 # CRTU check
-x = randn(Float32, indim, batchsize)
-test_rrule(linwrap, x; check_inferred=false, check_thunked_output_tangent=false, atol=1e-4, rtol=1e-4)
+# x = randn(Float32, indim, batchsize)
+# test_rrule(linwrap, x; check_inferred=false, check_thunked_output_tangent=false, atol=1e-4, rtol=1e-4)
 # const CRTU = ChainRulesTestUtils
 # primals_and_tangents = CRTU.auto_primal_and_tangent((linwrap, x))
 # CRTU.primal(primals_and_tangents)
@@ -67,6 +67,13 @@ test_rrule(linwrap, x; check_inferred=false, check_thunked_output_tangent=false,
 
 # Zygote check
 grad,  = Zygote.gradient(m->sum(m(x)), linwrap)
+params = map(x -> torch.as_tensor(x).to(device = linwrap.device, dtype = linwrap.dtype).requires_grad_(true), linwrap.params)
+torch_out = linwrap.torch_stateless_module(params, linwrap.buffers, map(z->torch.as_tensor(PyReverseDims(z)).to(dtype=linwrap.dtype), [x])...).sum()
+torchgrad = map(x-> x.numpy(), torch.autograd.grad(torch_out, params))
+@test length(torchgrad) == length(grad.params)
+for i in 1:length(grad.params)
+    @test isapprox(torchgrad[i], grad.params[i])
+end
 @test length(grad.params) == length(linwrap.params)
 @test grad.params[1] !== nothing
 @test grad.params[2] !== nothing
@@ -75,6 +82,12 @@ grad,  = Zygote.gradient(m->sum(m(x)), linwrap)
 
 grad, = Zygote.gradient(z->sum(linwrap(z)), x)
 @test size(grad) == size(x)
+params = map(x -> torch.as_tensor(x).to(device = linwrap.device, dtype = linwrap.dtype).requires_grad_(true), linwrap.params)
+xtorch = torch.as_tensor(PyReverseDims(x)).to(dtype=linwrap.dtype).requires_grad_(true)
+torch_out = linwrap.torch_stateless_module(params, linwrap.buffers, xtorch).sum()
+torchgrad = map(x-> ReverseDimsArray(x.numpy()), torch.autograd.grad(torch_out, xtorch))[1]
+@test length(torchgrad) == length(grad)
+@test isapprox(torchgrad, grad)
 
 # Flux check
 nn = Chain(Dense(4, 3), linwrap)
@@ -91,5 +104,30 @@ model = torch.nn.Sequential(
 modelwrap = TorchModuleWrapper(model)
 
 input = randn(Float32, 12, 12, 1, batchsize)
-output = modelwrap(input)
-test_rrule(modelwrap, input; check_inferred=false, check_thunked_output_tangent=false, atol=1e-2, rtol=1e-2)
+#output = modelwrap(input)
+
+x = input
+grad,  = Zygote.gradient(m->sum(m(x)), modelwrap)
+params = map(x -> torch.as_tensor(x).to(device = modelwrap.device, dtype = modelwrap.dtype).requires_grad_(true), modelwrap.params)
+torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->torch.as_tensor(PyReverseDims(z)).to(dtype=modelwrap.dtype), [x])...).sum()
+torchgrad = map(x-> x.numpy(), torch.autograd.grad(torch_out, params))
+@test length(torchgrad) == length(grad.params)
+for i in 1:length(grad.params)
+    @test isapprox(torchgrad[i], grad.params[i])
+end
+@test length(grad.params) == length(modelwrap.params)
+@test grad.params[1] !== nothing
+@test grad.params[2] !== nothing
+@test size(grad.params[1]) == size(modelwrap.params[1])
+@test size(grad.params[2]) == size(modelwrap.params[2])
+
+grad, = Zygote.gradient(z->sum(modelwrap(z)), x)
+@test size(grad) == size(x)
+params = map(x -> torch.as_tensor(x).to(device = modelwrap.device, dtype = modelwrap.dtype).requires_grad_(true), modelwrap.params)
+xtorch = torch.as_tensor(PyReverseDims(x)).to(dtype=modelwrap.dtype).requires_grad_(true)
+torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, xtorch).sum()
+torchgrad = map(x-> ReverseDimsArray(x.numpy()), torch.autograd.grad(torch_out, xtorch))[1]
+@test length(torchgrad) == length(grad)
+@test isapprox(torchgrad, grad)
+
+#test_rrule(modelwrap, input; check_inferred=false, check_thunked_output_tangent=false, atol=1e-2, rtol=1e-2)
