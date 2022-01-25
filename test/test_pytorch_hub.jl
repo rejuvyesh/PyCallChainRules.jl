@@ -45,7 +45,7 @@ model_gn = py"bn2group"(model)
 modelwrap = TorchModuleWrapper(model_gn)
 
 x = randn(Float32, reverse((1, 3, 224, 224)))
-y = modelwrap(x)
+#y = modelwrap(x)
 
 grad,  = Zygote.gradient(m->sum(m(x)), modelwrap)
 @test length(grad.params) == length(modelwrap.params)

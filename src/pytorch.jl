@@ -27,6 +27,7 @@ function via_dlpack(x)
 end
 
 
+
 struct TorchModuleWrapper
     torch_stateless_module::PyObject
     dtype::PyObject
@@ -64,13 +65,13 @@ function (wrap::TorchModuleWrapper)(args...)
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
-    torch_primal, torch_vjpfun = functorch.vjp(wrap.torch_stateless_module, Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
+    torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
+        map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
         torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype = wrap.dtype, device = wrap.device))
         jlparams_tangents = map(x -> via_dlpack(x), torch_tangent_vals[1])
-        args_tangents = project(map(x -> ReverseDimsArray(via_dlpack(x)), torch_tangent_vals[3:end]))
+        args_tangents = project(map(x -> ReverseDimsArray(via_dlpack(x)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), device = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
     return ReverseDimsArray(via_dlpack(torch_primal)), TorchModuleWrapper_pullback
@@ -84,6 +85,13 @@ function __init__()
         copy!(functorch, pyimport("functorch"))
         copy!(inspect, pyimport("inspect"))
         ispysetup[] = true
+        py"""
+        def buffer_implicit(fn, buffers):
+            def newfn(params, inputs):
+                return fn(params, buffers, inputs)
+            
+            return newfn
+        """        
     catch err
         @warn """PyCallChainRules.jl has failed to import torch and functorch from Python.
                  Please make sure these are installed. 

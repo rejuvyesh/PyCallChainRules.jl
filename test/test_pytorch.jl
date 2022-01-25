@@ -113,7 +113,7 @@ torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->t
 torchgrad = map(x-> x.numpy(), torch.autograd.grad(torch_out, params))
 @test length(torchgrad) == length(grad.params)
 for i in 1:length(grad.params)
-    @test isapprox(torchgrad[i], grad.params[i])
+    @test isapprox(torchgrad[i], grad.params[i], atol=1e-4, rtol=1e-4)
 end
 @test length(grad.params) == length(modelwrap.params)
 @test grad.params[1] !== nothing
@@ -128,6 +128,6 @@ xtorch = torch.as_tensor(PyReverseDims(x)).to(dtype=modelwrap.dtype).requires_gr
 torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, xtorch).sum()
 torchgrad = map(x-> ReverseDimsArray(x.numpy()), torch.autograd.grad(torch_out, xtorch))[1]
 @test length(torchgrad) == length(grad)
-@test isapprox(torchgrad, grad)
+@test isapprox(torchgrad, grad, atol=1e-4, rtol=1e-4)
 
 #test_rrule(modelwrap, input; check_inferred=false, check_thunked_output_tangent=false, atol=1e-2, rtol=1e-2)
