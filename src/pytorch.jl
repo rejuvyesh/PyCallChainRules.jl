@@ -39,11 +39,8 @@ function TorchModuleWrapper(torch_module, device)
     pyisinstance(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
     torch_module = torch_module.to(device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
-    @show typeof(params)
-    @show typeof(buffers)
     dtype = params[1].dtype
     jlparams = map(x -> PyArray(x.detach().numpy(); copy=false), params)
-    @show typeof(jlparams)
     return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
 end
 
@@ -56,21 +53,21 @@ end
 function (wrap::TorchModuleWrapper)(args...)
     # TODO: handle multiple outputs
     tensor_out = wrap.torch_stateless_module(Tuple(map(x -> torch.as_tensor(numpy.array(x, copy=true)).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(numpy.asarray(ReverseDimsArray(x))).to(dtype = wrap.dtype, device = wrap.device), args)...)
-    return ReverseDimsArray(PyArray(tensor_out.detach().numpy(), copy=true))
+        wrap.buffers, map(x -> torch.as_tensor(numpy.asarray(reversedims(x))).to(dtype = wrap.dtype, device = wrap.device), args)...)
+    return reversedims(PyArray(tensor_out.detach().numpy(), copy=true))
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
     torch_primal, torch_vjpfun = functorch.vjp(wrap.torch_stateless_module, Tuple(map(x -> torch.as_tensor(numpy.array(x, copy=true)).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(numpy.asarray(ReverseDimsArray(x))).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
+        wrap.buffers, map(x -> torch.as_tensor(numpy.asarray(reversedims(x))).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = Tuple(torch_vjpfun(torch.as_tensor(numpy.asarray(PyArray(ReverseDimsArray(Δ), copy=true))).to(dtype = wrap.dtype, device = wrap.device)))
+        torch_tangent_vals = Tuple(torch_vjpfun(torch.as_tensor(numpy.asarray(PyArray(reversedims(Δ), copy=true))).to(dtype = wrap.dtype, device = wrap.device)))
         jlparams_tangents = map(x -> PyArray(x.detach().numpy(); copy=true), torch_tangent_vals[1])
-        args_tangents = project(map(x -> ReverseDimsArray(PyArray(x.detach().numpy(); copy=true)), torch_tangent_vals[3:end]))
+        args_tangents = project(map(x -> reversedims(PyArray(x.detach().numpy(); copy=true)), torch_tangent_vals[3:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), device = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
-    return ReverseDimsArray(PyArray(torch_primal.detach().numpy(); copy=true)), TorchModuleWrapper_pullback
+    return reversedims(PyArray(torch_primal.detach().numpy(); copy=true)), TorchModuleWrapper_pullback
 end
 
 
