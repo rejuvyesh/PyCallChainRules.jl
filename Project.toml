@@ -1,7 +1,7 @@
 name = "PyCallChainRules"
 uuid = "b12ccfe2-7326-416f-9f4f-cd3183bd9fe8"
 authors = ["rejuvyesh <mail@rejuvyesh.com> and contributors"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
