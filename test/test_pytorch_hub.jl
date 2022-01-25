@@ -45,7 +45,14 @@ model_gn = py"bn2group"(model)
 modelwrap = TorchModuleWrapper(model_gn)
 
 x = randn(Float32, reverse((1, 3, 224, 224)))
-y = modelwrap(x)
+#y = modelwrap(x)
 
 grad,  = Zygote.gradient(m->sum(m(x)), modelwrap)
 @test length(grad.params) == length(modelwrap.params)
+params = map(x -> torch.as_tensor(x).to(device = modelwrap.device, dtype = modelwrap.dtype).requires_grad_(true), modelwrap.params)
+torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->torch.as_tensor(PyReverseDims(z)).to(dtype=modelwrap.dtype), [x])...).sum()
+torchgrad = map(x-> x.numpy(), torch.autograd.grad(torch_out, params))
+@test length(torchgrad) == length(grad.params)
+for i in 1:length(grad.params)
+    @test isapprox(torchgrad[i], grad.params[i], atol=1e-3, rtol=1e-3)
+end
