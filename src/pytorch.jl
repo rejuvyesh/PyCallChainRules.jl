@@ -16,12 +16,16 @@ function reversedims(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
     permutedims(a, N:-1:1)
 end
 
+function ReverseDimsArray(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
+    PermutedDimsArray(a, N:-1:1)
+end
+
 struct TorchModuleWrapper
     torch_stateless_module::Py
     dtype::Py
     device::Py
-    params::Tuple
-    buffers::Tuple
+    params::Vector
+    buffers::Py
 end
 
 
@@ -32,44 +36,48 @@ Base.iterate(f::TorchModuleWrapper) = iterate(f.params)
 Base.iterate(f::TorchModuleWrapper, state) = iterate(f.params, state)
 
 function TorchModuleWrapper(torch_module, device)
-    pyisintance(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
+    pyisinstance(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
     torch_module = torch_module.to(device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
+    @show typeof(params)
+    @show typeof(buffers)
     dtype = params[1].dtype
-    jlparams = map(x -> x.detach().numpy(), params)
+    jlparams = map(x -> PyArray(x.detach().numpy(); copy=false), params)
+    @show typeof(jlparams)
     return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
 end
 
 function TorchModuleWrapper(torch_module)
-    device = torch.cuda.is_available() ? torch.device("cuda:0") : torch.device("cpu")
+    #device = pyconvert(Bool, torch.cuda.is_available()) ? torch.device("cuda:0") : torch.device("cpu")
+    device = torch.device("cpu")
     TorchModuleWrapper(torch_module, device)
 end
 
 function (wrap::TorchModuleWrapper)(args...)
     # TODO: handle multiple outputs
-    tensor_out = wrap.torch_stateless_module(Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device), args)...)
-    return reversedims(tensor_out.detach().numpy())
+    tensor_out = wrap.torch_stateless_module(Tuple(map(x -> torch.as_tensor(numpy.array(x, copy=true)).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
+        wrap.buffers, map(x -> torch.as_tensor(numpy.asarray(ReverseDimsArray(x))).to(dtype = wrap.dtype, device = wrap.device), args)...)
+    return ReverseDimsArray(PyArray(tensor_out.detach().numpy(), copy=true))
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
-    torch_primal, torch_vjpfun = functorch.vjp(wrap.torch_stateless_module, Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
+    torch_primal, torch_vjpfun = functorch.vjp(wrap.torch_stateless_module, Tuple(map(x -> torch.as_tensor(numpy.array(x, copy=true)).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
+        wrap.buffers, map(x -> torch.as_tensor(numpy.asarray(ReverseDimsArray(x))).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype = wrap.dtype, device = wrap.device))
-        jlparams_tangents = map(x -> x.detach().numpy(), torch_tangent_vals[1])
-        args_tangents = project(map(x -> reversedims(x.detach().numpy()), torch_tangent_vals[3:end]))
+        torch_tangent_vals = Tuple(torch_vjpfun(torch.as_tensor(numpy.asarray(PyArray(ReverseDimsArray(Δ), copy=true))).to(dtype = wrap.dtype, device = wrap.device)))
+        jlparams_tangents = map(x -> PyArray(x.detach().numpy(); copy=true), torch_tangent_vals[1])
+        args_tangents = project(map(x -> ReverseDimsArray(PyArray(x.detach().numpy(); copy=true)), torch_tangent_vals[3:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), device = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
-    return reversedims(torch_primal.detach().numpy()), TorchModuleWrapper_pullback
+    return ReverseDimsArray(PyArray(torch_primal.detach().numpy(); copy=true)), TorchModuleWrapper_pullback
 end
 
 
 function __init__()
     try
         pycopy!(torch, pyimport("torch"))
-        pycopy!(torch, pyimport("numpy"))
+        pycopy!(numpy, pyimport("numpy"))
         pycopy!(functorch, pyimport("functorch"))
         pycopy!(inspect, pyimport("inspect"))
         ispysetup[] = true

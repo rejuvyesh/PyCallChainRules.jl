@@ -1,4 +1,4 @@
-using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, ispysetup
+using PyCallChainRules.Torch: TorchModuleWrapper, ispysetup
 
 using Test
 using ChainRulesTestUtils
@@ -6,17 +6,28 @@ using Zygote
 using Flux
 using ChainRulesCore: NoTangent, AbstractZero
 import Random
-using PyCall
+using PythonCall
 
 if !ispysetup[]
     return
 end
 
+torch = pyimport("torch")
+
 Random.seed!(42)
 ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
-ChainRulesTestUtils.test_approx(::AbstractZero, x::PyObject, msg=""; kwargs...) = @test true
+ChainRulesTestUtils.test_approx(::AbstractZero, x::Py, msg=""; kwargs...) = @test true
 ChainRulesTestUtils.test_approx(::AbstractZero, x::Tuple{}, msg=""; kwargs...) = @test true
 
+function ChainRulesTestUtils.FiniteDifferences.to_vec(x::PyArray)
+    x_vec, from_vec = ChainRulesTestUtils.FiniteDifferences.to_vec(vec(Array(x)))
+
+    function Array_from_vec(x_vec)
+        return PyArray(reshape(from_vec(x_vec), size(x)))
+    end
+
+    return x_vec, Array_from_vec
+end
 function ChainRulesTestUtils.FiniteDifferences.to_vec(x::TorchModuleWrapper) 
     params_vec, back = ChainRulesTestUtils.FiniteDifferences.to_vec(x.params)
     function TorchModuleWrapper_from_vec(params_vec)
@@ -39,7 +50,7 @@ y = linwrap(x)
 
 # CRTU check
 x = randn(Float32, indim, batchsize)
-test_rrule(linwrap, x; check_inferred=false, check_thunked_output_tangent=false, atol=1e-4, rtol=1e-4)
+test_rrule(linwrap, x; check_inferred=false, check_thunked_output_tangent=false, atol=1e-3, rtol=1e-3)
 # const CRTU = ChainRulesTestUtils
 # primals_and_tangents = CRTU.auto_primal_and_tangent((linwrap, x))
 # CRTU.primal(primals_and_tangents)
