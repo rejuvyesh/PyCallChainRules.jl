@@ -1,12 +1,13 @@
 module Jax
 
-using PyCall
+using PythonCall
+using PythonCall: pynew, pycopy!
 using ChainRulesCore
 
-const inspect = PyNULL()
-const jax = PyNULL()
-const stax = PyNULL()
-const numpy = PyNULL()
+const inspect = pynew()
+const jax = pynew()
+const stax = pynew()
+const numpy = pynew()
 
 const ispysetup = Ref{Bool}(false)
 
@@ -18,7 +19,7 @@ mapover(f, iselement, x) =
                   iselement(x) ? f(x) : map(e -> mapover(f, iselement, e), x)
 
 struct JaxFunctionWrapper
-    jaxfn::PyObject
+    jaxfn::Py
 end
 
 function (wrap::JaxFunctionWrapper)(args...)
@@ -31,7 +32,7 @@ function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     project = ProjectTo(args)
     jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...)
     function JaxFunctionWrapper_pullback(Δ)
-        tangent_vals = mapover(x->reversedims(numpy.array(x)), x-> x isa PyObject,jax_vjpfun(jax.numpy.array(PyReverseDims(Δ))))
+        tangent_vals = mapover(x->reversedims(numpy.array(x)), x-> x isa Py,jax_vjpfun(jax.numpy.array(PyReverseDims(Δ))))
 
         return (NoTangent(), project(tangent_vals)...)
     end
@@ -41,10 +42,10 @@ end
 
 function __init__()
     try
-        copy!(jax, pyimport("jax"))
-        copy!(numpy, pyimport("numpy"))
-        copy!(stax, pyimport("jax.example_libraries.stax"))
-        copy!(inspect, pyimport("inspect"))
+        pycopy!(jax, pyimport("jax"))
+        pycopy!(numpy, pyimport("numpy"))
+        pycopy!(stax, pyimport("jax.example_libraries.stax"))
+        pycopy!(inspect, pyimport("inspect"))
         ispysetup[] = true
     catch err
         @warn """PyCallChainRules.jl has failed to import jax from Python.

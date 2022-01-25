@@ -1,0 +1,9 @@
+channels = ["pytorch-nightly"]
+
+[pip.deps]
+functorch = "@ git+https://github.com/pytorch/functorch.git"
+
+[deps]
+ninja = ""
+pytorch = ""
+numpy = ""

@@ -1,11 +1,14 @@
 module Torch
 
-using PyCall
+using PythonCall
+using PythonCall: pynew, pycopy!
+
 using ChainRulesCore
 
-const inspect = PyNULL()
-const torch = PyNULL()
-const functorch = PyNULL()
+const inspect = pynew()
+const numpy = pynew()
+const torch = pynew()
+const functorch = pynew()
 
 const ispysetup = Ref{Bool}(false)
 
@@ -14,9 +17,9 @@ function reversedims(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
 end
 
 struct TorchModuleWrapper
-    torch_stateless_module::PyObject
-    dtype::PyObject
-    device::PyObject
+    torch_stateless_module::Py
+    dtype::Py
+    device::Py
     params::Tuple
     buffers::Tuple
 end
@@ -29,7 +32,7 @@ Base.iterate(f::TorchModuleWrapper) = iterate(f.params)
 Base.iterate(f::TorchModuleWrapper, state) = iterate(f.params, state)
 
 function TorchModuleWrapper(torch_module, device)
-    pybuiltin("isinstance")(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
+    pyisintance(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
     torch_module = torch_module.to(device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
@@ -65,9 +68,10 @@ end
 
 function __init__()
     try
-        copy!(torch, pyimport("torch"))
-        copy!(functorch, pyimport("functorch"))
-        copy!(inspect, pyimport("inspect"))
+        pycopy!(torch, pyimport("torch"))
+        pycopy!(torch, pyimport("numpy"))
+        pycopy!(functorch, pyimport("functorch"))
+        pycopy!(inspect, pyimport("inspect"))
         ispysetup[] = true
     catch err
         @warn """PyCallChainRules.jl has failed to import torch and functorch from Python.
