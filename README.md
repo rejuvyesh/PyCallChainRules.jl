@@ -7,7 +7,15 @@ While Julia is great, there are still a lot of existing useful differentiable py
 
 ## Basic Usage
 
+
 ### PyTorch
+
+**Install Python dependencies**:
+```julia
+using PyCall
+run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html --upgrade`)
+run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
+```
 
 ```julia
 using PyCallChainRules.Torch: TorchModuleWrapper, torch
