@@ -2,6 +2,7 @@ module Torch
 
 using PyCall
 using ChainRulesCore
+using CUDA
 using DLPack
 
 const inspect = PyNULL()
@@ -23,7 +24,13 @@ function rowmajor2colmajor(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
 end
 
 function via_dlpack(x)
-    return rowmajor2colmajor(Base.unsafe_wrap(Array, DLArray{Float32,x.dim()}(@pycall dlpack.to_dlpack(x)::PyObject)))
+    dla = DLArray{Float32,x.dim()}(@pycall dlpack.to_dlpack(x)::PyObject)
+    if DLPack.device_type(dla) == DLPack.kDLCPU
+        ja = rowmajor2colmajor(Base.unsafe_wrap(Array, dla))
+    elseif DLPack.device_type(dla) == DLPack.kDLCUDA
+        ja = rowmajor2colmajor(Base.unsafe_wrap(CuArray, dla))
+    end
+    return ja
 end
 
 
@@ -44,11 +51,18 @@ Base.iterate(f::TorchModuleWrapper, state) = iterate(f.params, state)
 
 function TorchModuleWrapper(torch_module, device)
     pybuiltin("isinstance")(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
-    torch_module = torch_module.to(device)
+    torch_module = torch_module.to(device=device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
     #jlparams = map(x -> x.detach().numpy(), params)
-    jlparams = map(x -> Base.unsafe_wrap(Array, DLArray{Float32,x.dim()}(@pycall dlpack.to_dlpack(x)::PyObject)), params) # TODO
+    jlparams = map(params) do x
+        dla = DLArray{Float32,x.dim()}(@pycall dlpack.to_dlpack(x.cpu())::PyObject)
+        if DLPack.device_type(dla) == DLPack.kDLCPU
+            return Base.unsafe_wrap(Array, dla)
+        elseif DLPack.device_type(dla) == DLPack.kDLCUDA
+            return Base.unsafe_wrap(CuArray, dla)
+        end
+    end# TODO
     return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
 end
 
@@ -60,16 +74,16 @@ end
 function (wrap::TorchModuleWrapper)(args...)
     # TODO: handle multiple outputs
     tensor_out = wrap.torch_stateless_module(Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device), args)...)
+        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(Array(x))).to(dtype = wrap.dtype, device = wrap.device), args)...)
     return ReverseDimsArray(via_dlpack(tensor_out))
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
     torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
+        map(x -> torch.as_tensor(PyReverseDims(Array(x))).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype = wrap.dtype, device = wrap.device))
+        torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Array(Δ))).to(dtype = wrap.dtype, device = wrap.device))
         jlparams_tangents = map(x -> via_dlpack(x), torch_tangent_vals[1])
         args_tangents = project(map(x -> ReverseDimsArray(via_dlpack(x)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), device = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
