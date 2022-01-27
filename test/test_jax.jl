@@ -15,6 +15,9 @@ end
 function reversedims(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
     permutedims(a, N:-1:1)
 end
+function ReverseDimsArray(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
+    PermutedDimsArray(a, N:-1:1)
+end
 ### !!! Remove this piracy once fixed on CRTU
 ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
 
