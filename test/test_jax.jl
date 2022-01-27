@@ -11,9 +11,6 @@ if !ispysetup[]
     return
 end
 
-### !!! Remove this piracy once fixed on CRTU
-ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
-
 batchsize = 1
 indim = 3
 outdim = 2

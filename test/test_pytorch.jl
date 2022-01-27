@@ -13,7 +13,7 @@ if !ispysetup[]
 end
 
 Random.seed!(42)
-ChainRulesTestUtils.rand_tangent(rng::Random.AbstractRNG, x::Ptr) = NoTangent()
+
 ChainRulesTestUtils.test_approx(::AbstractZero, x::PyObject, msg=""; kwargs...) = @test true
 ChainRulesTestUtils.test_approx(::AbstractZero, x::Tuple{}, msg=""; kwargs...) = @test true
 
