@@ -23,7 +23,7 @@ function rowmajor2colmajor(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
 end
 
 function via_dlpack(x)
-    return rowmajor2colmajor(Base.unsafe_wrap(Array, DLArray{Float32,x.dim()}(@pycall dlpack.to_dlpack(x)::PyObject)))
+    return rowmajor2colmajor(Base.unsafe_wrap(Array, DLArray(@pycall dlpack.to_dlpack(x)::PyObject)))
 end
 
 
@@ -48,12 +48,13 @@ function TorchModuleWrapper(torch_module, device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
     #jlparams = map(x -> x.detach().numpy(), params)
-    jlparams = map(x -> Base.unsafe_wrap(Array, DLArray{Float32,x.dim()}(@pycall dlpack.to_dlpack(x)::PyObject)), params) # TODO
+    jlparams = map(x -> Base.unsafe_wrap(Array, DLArray(@pycall dlpack.to_dlpack(x)::PyObject)), params) # TODO
     return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
 end
 
 function TorchModuleWrapper(torch_module)
-    device = torch.cuda.is_available() ? torch.device("cuda:0") : torch.device("cpu")
+    #device = torch.cuda.is_available() ? torch.device("cuda:0") : torch.device("cpu")
+    device = torch.device("cpu")
     TorchModuleWrapper(torch_module, device)
 end
 

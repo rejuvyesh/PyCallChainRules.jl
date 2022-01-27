@@ -24,7 +24,7 @@ function rowmajor2colmajor(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
 end
 
 function via_dlpack(x)
-    return rowmajor2colmajor(Base.unsafe_wrap(Array, DLArray{Float32, x.ndim}(@pycall dlpack.to_dlpack(x)::PyObject)))
+    return rowmajor2colmajor(Base.unsafe_wrap(Array, DLArray(@pycall dlpack.to_dlpack(x)::PyObject)))
 end
 
 
