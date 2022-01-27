@@ -1,5 +1,6 @@
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DLPack = "53c2dc0f-f7d5-43fd-8906-6c0220547083"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 PyCallChainRules = "b12ccfe2-7326-416f-9f4f-cd3183bd9fe8"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
