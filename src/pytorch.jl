@@ -1,31 +1,17 @@
 module Torch
 
 using PyCall
+using PyCall: f_contiguous
 using ChainRulesCore
 using DLPack
+
+using ..PyCallChainRules: via_dlpack, ReverseDimsArray
 
 const inspect = PyNULL()
 const torch = PyNULL()
 const functorch = PyNULL()
 const dlpack = PyNULL()
 const ispysetup = Ref{Bool}(false)
-
-
-function ReverseDimsArray(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
-    PermutedDimsArray(a, N:-1:1)
-end
-
-rowmajor2colmajor(a::AbstractArray{T,2}) where {T<:AbstractFloat} = a
-rowmajor2colmajor(a::AbstractArray{T,1}) where {T<:AbstractFloat} = a
-
-function rowmajor2colmajor(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
-    PermutedDimsArray(reshape(a, reverse(size(a))...), N:-1:1)
-end
-
-function via_dlpack(x)
-    return rowmajor2colmajor(Base.unsafe_wrap(Array, DLArray(@pycall dlpack.to_dlpack(x)::PyObject)))
-end
-
 
 
 struct TorchModuleWrapper
@@ -62,7 +48,7 @@ function (wrap::TorchModuleWrapper)(args...)
     # TODO: handle multiple outputs
     tensor_out = wrap.torch_stateless_module(Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
         wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device), args)...)
-    return ReverseDimsArray(via_dlpack(tensor_out))
+    return ReverseDimsArray(via_dlpack(dlpack, tensor_out))
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
@@ -71,11 +57,11 @@ function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
         torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype = wrap.dtype, device = wrap.device))
-        jlparams_tangents = map(x -> via_dlpack(x), torch_tangent_vals[1])
-        args_tangents = project(map(x -> ReverseDimsArray(via_dlpack(x)), torch_tangent_vals[2:end]))
+        jlparams_tangents = map(x -> via_dlpack(dlpack, x), torch_tangent_vals[1])
+        args_tangents = project(map(x -> ReverseDimsArray(via_dlpack(dlpack, x)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), device = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
-    return ReverseDimsArray(via_dlpack(torch_primal)), TorchModuleWrapper_pullback
+    return ReverseDimsArray(via_dlpack(dlpack, torch_primal)), TorchModuleWrapper_pullback
 end
 
 
