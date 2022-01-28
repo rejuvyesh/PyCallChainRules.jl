@@ -1,4 +1,4 @@
-using PyCallChainRules: via_dlpack
+using PyCallChainRules: via_dlpack, ReverseDimsArray
 
 using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, dlpack, ispysetup
 
