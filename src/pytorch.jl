@@ -1,7 +1,7 @@
 module Torch
 
 using PyCall
-using PyCall: f_contiguous
+
 using ChainRulesCore
 using DLPack
 
@@ -22,7 +22,7 @@ struct TorchModuleWrapper
     buffers::Tuple
 end
 
-Base.show(io::IO, f::TorchModuleWrapper) = print(io, f.torch_stateless_module, " ", f.dtype, " ", f.device, "params size=", size.(f.params))
+Base.show(io::IO, f::TorchModuleWrapper) = print(io, f.torch_stateless_module, " ", f.dtype, " ", f.device, " params size=", size.(f.params))
 
 Base.length(f::TorchModuleWrapper) = length(f.params)
 Base.iterate(f::TorchModuleWrapper) = iterate(f.params)
@@ -34,7 +34,14 @@ function TorchModuleWrapper(torch_module, device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
     #jlparams = map(x -> x.detach().numpy(), params)
-    jlparams = map(x -> Base.unsafe_wrap(Array, DLArray(@pycall dlpack.to_dlpack(x)::PyObject)), params) # TODO
+    jlparams = map(params) do x
+        dla = @pycall dlpack.to_dlpack(x)::PyObject
+        if DLPack.device_type(dla) == DLPack.kDLCPU
+            Base.unsafe_wrap(Array, DLArray(dla))
+        # elseif DLPack.device_type(dla) == DLPack.kDLCUDA
+        #     arr = Base.unsafe_wrap(CuArray, dla)
+        end        
+    end
     return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
 end
 
