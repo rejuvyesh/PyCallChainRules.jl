@@ -1,6 +1,6 @@
-using PyCallChainRules: via_dlpack, ReverseDimsArray
+using PyCallChainRules: ReverseDimsArray
 
-using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, dlpack, ispysetup
+using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, pyto_dlpack, ispysetup
 
 using Test
 using ChainRulesTestUtils
@@ -8,6 +8,7 @@ using Zygote
 using ChainRulesCore: NoTangent
 using Random
 using PyCall
+using DLPack
 #using Flux
 
 if !ispysetup[]
@@ -22,7 +23,7 @@ end
     key = jax.random.PRNGKey(0)
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
         xto = jax.random.normal(key, dims)
-        xjl = via_dlpack(dlpack, xto)
+        xjl = DLArray(xto, pyto_dlpack).data
         @test isapprox(numpy.array(xto), xjl, atol=1e-4, rtol=1e-4)
     end
 end
@@ -51,7 +52,7 @@ def grad(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2)(params, x)
 """
-jaxgrad = map(x->ReverseDimsArray(via_dlpack(dlpack, x)), (py"grad")(apply_lin, params, PyReverseDims(x)))
+jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack).data), (py"grad")(apply_lin, params, PyReverseDims(x)))
 @test length(grad) == length(params_np)
 @test size(grad[1]) == size(params_np[1])
 @test size(grad[2]) == size(params_np[2])
@@ -67,5 +68,5 @@ def gradx(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2, argnums=(1,))(params, x)
 """
-jaxgrad = map(x->ReverseDimsArray(via_dlpack(dlpack, x)), (py"gradx")(apply_lin, params, PyReverseDims(x)))
+jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack).data), (py"gradx")(apply_lin, params, PyReverseDims(x)))
 @test isapprox(jaxgrad[1], grad)

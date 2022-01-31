@@ -4,6 +4,8 @@ using PyCall
 using ChainRulesCore
 using DLPack
 
+using ..PyCallChainRules: ReverseDimsArray
+
 const inspect = PyNULL()
 const jax = PyNULL()
 const dlpack = PyNULL()
@@ -24,17 +26,17 @@ end
 function (wrap::JaxFunctionWrapper)(args...)
     # TODO: handle multiple outputs
     out = (wrap.jaxfn(mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...))
-    return DLArray(out, pyto_dlpack).data
+    return ReverseDimsArray(DLArray(out, pyto_dlpack).data)
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     project = ProjectTo(args)
     jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...)
     function JaxFunctionWrapper_pullback(Δ)
-        tangent_vals = mapover(x->(DLArray(x, pyto_dlpack).data), x-> x isa PyObject, jax_vjpfun(jax.numpy.asarray(PyReverseDims(Δ))))
+        tangent_vals = mapover(x->ReverseDimsArray(DLArray(x, pyto_dlpack).data), x-> x isa PyObject, jax_vjpfun(jax.numpy.asarray(PyReverseDims(Δ))))
         return (NoTangent(), project(tangent_vals)...)
     end
-    return (DLArray(jax_primal, pyto_dlpack).data), JaxFunctionWrapper_pullback
+    return ReverseDimsArray(DLArray(jax_primal, pyto_dlpack).data), JaxFunctionWrapper_pullback
 end
 
 
