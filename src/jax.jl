@@ -26,17 +26,17 @@ end
 function (wrap::JaxFunctionWrapper)(args...)
     # TODO: handle multiple outputs
     out = (wrap.jaxfn(mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...))
-    return ReverseDimsArray(DLArray(out, pyto_dlpack).data)
+    return ReverseDimsArray(DLArray(out, pyto_dlpack))
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     project = ProjectTo(args)
     jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...)
     function JaxFunctionWrapper_pullback(Δ)
-        tangent_vals = mapover(x->ReverseDimsArray(DLArray(x, pyto_dlpack).data), x-> x isa PyObject, jax_vjpfun(jax.numpy.asarray(PyReverseDims(Δ))))
+        tangent_vals = mapover(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), x-> x isa PyObject, jax_vjpfun(jax.numpy.asarray(PyReverseDims(Δ))))
         return (NoTangent(), project(tangent_vals)...)
     end
-    return ReverseDimsArray(DLArray(jax_primal, pyto_dlpack).data), JaxFunctionWrapper_pullback
+    return ReverseDimsArray(DLArray(jax_primal, pyto_dlpack)), JaxFunctionWrapper_pullback
 end
 
 
