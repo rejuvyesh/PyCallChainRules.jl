@@ -21,7 +21,7 @@ function compare_grad_wrt_params(modelwrap, inputs...)
     grad,  = Zygote.gradient(m->sum(m(inputs...)), modelwrap)
     @test length(torchgrad) == length(grad.params)
     for i in 1:length(grad.params)
-        @test isapprox(torchgrad[i], grad.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchgrad[i], grad.params[i])
     end
     @test length(grad.params) == length(modelwrap.params)
     @test grad.params[1] !== nothing
@@ -38,7 +38,7 @@ function compare_grad_wrt_inputs(modelwrap, x)
     grad, = Zygote.gradient(z->sum(modelwrap(z)), copy(x))
     @test size(grad) == size(x)
     @test length(torchgrad) == length(grad)
-    @test isapprox(torchgrad, grad, atol=1e-4, rtol=1e-4)
+    @test isapprox(torchgrad, grad)
 end
 
 # Random.seed!(42)
@@ -48,7 +48,7 @@ end
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
         xto = torch.randn(dims...)
         xjl = DLArray(xto, pyto_dlpack)
-        @test isapprox(xto.numpy(), xjl, atol=1e-4, rtol=1e-4)
+        @test isapprox(xto.numpy(), xjl)
     end
 end
 
@@ -62,21 +62,21 @@ hiddendim = 4
     torchparams = Tuple([copy(DLArray(p, pyto_dlpack)) for p in lin.parameters()])
     linwrap = TorchModuleWrapper(lin)
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], linwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], linwrap.params[i])
     end
     x = randn(Float32, indim, batchsize)
     y = linwrap(x)
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], linwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], linwrap.params[i] )
     end
     @test size(y) == (outdim, batchsize)
     compare_grad_wrt_params(linwrap, deepcopy(x))
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], linwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], linwrap.params[i])
     end
     compare_grad_wrt_inputs(linwrap, deepcopy(x))
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], linwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], linwrap.params[i])
     end
 end
 
@@ -85,24 +85,24 @@ end
     torchparams = Tuple([copy(DLArray(p, pyto_dlpack)) for p in mlp.parameters()])
     mlpwrap = TorchModuleWrapper(mlp)
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], mlpwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], mlpwrap.params[i])
     end
 
     x = randn(Float32, indim, batchsize)
     y = mlpwrap(x)
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], mlpwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], mlpwrap.params[i])
     end
 
     @test size(y) == (outdim, batchsize)
     compare_grad_wrt_params(mlpwrap, deepcopy(x))
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], mlpwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], mlpwrap.params[i])
     end
 
     compare_grad_wrt_inputs(mlpwrap, deepcopy(x))
     for i in 1:length(torchparams)
-        @test isapprox(torchparams[i], mlpwrap.params[i], atol=1e-4, rtol=1e-4)
+        @test isapprox(torchparams[i], mlpwrap.params[i])
     end
 
 end

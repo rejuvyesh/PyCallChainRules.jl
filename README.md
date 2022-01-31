@@ -46,5 +46,4 @@ run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\])
 ## Current Limitations / TODO
 
 - CPU only
-- Lots of array copies
 - Assumes wrapped python functions are single output only
