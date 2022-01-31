@@ -1,11 +1,8 @@
 module Jax
 
 using PyCall
-using PyCall: f_contiguous
 using ChainRulesCore
 using DLPack
-
-using ..PyCallChainRules: via_dlpack, ReverseDimsArray
 
 const inspect = PyNULL()
 const jax = PyNULL()
@@ -15,6 +12,7 @@ const numpy = PyNULL()
 
 const ispysetup = Ref{Bool}(false)
 
+pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 
 mapover(f, iselement, x) =
                   iselement(x) ? f(x) : map(e -> mapover(f, iselement, e), x)
@@ -26,17 +24,17 @@ end
 function (wrap::JaxFunctionWrapper)(args...)
     # TODO: handle multiple outputs
     out = (wrap.jaxfn(mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...))
-    return ReverseDimsArray(via_dlpack(dlpack, out))
+    return DLArray(out, pyto_dlpack).data
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     project = ProjectTo(args)
     jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, mapover(x->jax.numpy.asarray(PyReverseDims(x)), x-> x isa Array, args)...)
     function JaxFunctionWrapper_pullback(Δ)
-        tangent_vals = mapover(x->ReverseDimsArray(via_dlpack(dlpack, x)), x-> x isa PyObject, jax_vjpfun(jax.numpy.asarray(PyReverseDims(Δ))))
+        tangent_vals = mapover(x->(DLArray(x, pyto_dlpack).data), x-> x isa PyObject, jax_vjpfun(jax.numpy.asarray(PyReverseDims(Δ))))
         return (NoTangent(), project(tangent_vals)...)
     end
-    return ReverseDimsArray(via_dlpack(dlpack, jax_primal)), JaxFunctionWrapper_pullback
+    return (DLArray(jax_primal, pyto_dlpack).data), JaxFunctionWrapper_pullback
 end
 
 
