@@ -28,17 +28,27 @@ Base.length(f::TorchModuleWrapper) = length(f.params)
 Base.iterate(f::TorchModuleWrapper) = iterate(f.params)
 Base.iterate(f::TorchModuleWrapper, state) = iterate(f.params, state)
 
-function TorchModuleWrapper(torch_module, device)
+function TorchModuleWrapper(torch_module, device; jit=true)
     pybuiltin("isinstance")(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
     torch_module = torch_module.to(device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
+    if jit
+        try
+            funmod = torch.jit.script(funmod)
+        catch err
+            if err isa PyCall.PyError 
+                @warn "Failed to JIT" err.T
+            end
+        end
+    end
     dtype = params[1].dtype
     jlparams = map(x -> x.detach().numpy(), params)
     return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
 end
 
-function TorchModuleWrapper(torch_module)
-    device = torch.cuda.is_available() ? torch.device("cuda:0") : torch.device("cpu")
+function TorchModuleWrapper(torch_module; jit=true)
+    #device = torch.cuda.is_available() ? torch.device("cuda:0") : torch.device("cpu")
+    device = torch.device("cpu")
     TorchModuleWrapper(torch_module, device)
 end
 
