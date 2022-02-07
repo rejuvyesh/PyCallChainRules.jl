@@ -1,6 +1,6 @@
 using PyCallChainRules: ReverseDimsArray
 
-using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, pyto_dlpack, ispysetup
+using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, pyto_dlpack, pyfrom_dlpack, ispysetup
 
 using Test
 using ChainRulesTestUtils
@@ -34,7 +34,8 @@ outdim = 2
 
 init_lin, apply_lin = stax.Dense(outdim)
 _, params = init_lin(jax.random.PRNGKey(0), (-1, indim))
-params_np = map(reversedims ∘ numpy.array, params)
+#params_np = map(reversedims ∘ numpy.array, params)
+params_np = map(x->reversedims(Array(DLArray(x, pyto_dlpack))), params)
 linwrap = JaxFunctionWrapper(apply_lin)
 x = randn(Float32, indim, batchsize)
 y = linwrap(params_np, x)
@@ -52,7 +53,7 @@ def grad(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2)(params, x)
 """
-jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), (py"grad")(apply_lin, params, PyReverseDims(x)))
+jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), (py"grad")(apply_lin, params, DLPack.share(x, pyfrom_dlpack)))
 @test length(grad) == length(params_np)
 @test size(grad[1]) == size(params_np[1])
 @test size(grad[2]) == size(params_np[2])
@@ -68,5 +69,5 @@ def gradx(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2, argnums=(1,))(params, x)
 """
-jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), (py"gradx")(apply_lin, params, PyReverseDims(x)))
+jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), (py"gradx")(apply_lin, params, DLPack.share(x, pyfrom_dlpack)))
 @test isapprox(jaxgrad[1], grad)
