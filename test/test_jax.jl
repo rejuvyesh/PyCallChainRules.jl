@@ -3,17 +3,20 @@ using PyCallChainRules: ReverseDimsArray
 using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, pyto_dlpack, pyfrom_dlpack, ispysetup
 
 using Test
-using ChainRulesTestUtils
+
 using Zygote
-using ChainRulesCore: NoTangent
+using CUDA
 using Random
 using PyCall
 using DLPack
 #using Flux
 
+
+
 if !ispysetup[]
     return
 end
+
 
 function reversedims(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
     permutedims(a, N:-1:1)
@@ -23,8 +26,8 @@ end
     key = jax.random.PRNGKey(0)
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
         xto = jax.random.normal(key, dims)
-        xjl = DLArray(xto, pyto_dlpack).data
-        @test isapprox(numpy.array(xto), xjl)
+        xjl = DLArray(xto, pyto_dlpack)
+        @test isapprox(numpy.array(xto), Array(xjl))
     end
 end
 
@@ -35,9 +38,13 @@ outdim = 2
 init_lin, apply_lin = stax.Dense(outdim)
 _, params = init_lin(jax.random.PRNGKey(0), (-1, indim))
 #params_np = map(reversedims ∘ numpy.array, params)
-params_np = map(x->reversedims(Array(DLArray(x, pyto_dlpack))), params)
+params_np = map(x->reversedims((DLArray(x, pyto_dlpack))), params)
 linwrap = JaxFunctionWrapper(apply_lin)
 x = randn(Float32, indim, batchsize)
+if CUDA.functional()
+    params_np = map(cu, params_np)
+    x = cu(x)
+end
 y = linwrap(params_np, x)
 @test size(y) == (outdim, batchsize)
 
@@ -45,6 +52,11 @@ y = linwrap(params_np, x)
 #test_rrule(linwrap, params_np, x; check_inferred=false, check_thunked_output_tangent=false, rtol=1e-4, atol=1e-4)
 
 # Zygote check
+if CUDA.functional()
+    params_np = map(cu, params_np)
+    x = cu(x)
+end
+@show typeof(params_np)
 grad,  = Zygote.gradient(p->sum(linwrap(p, x)), params_np)
 py"""
 import jax
