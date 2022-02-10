@@ -27,7 +27,7 @@ end
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
         xto = jax.random.normal(key, dims)
         xjl = DLArray(xto, pyto_dlpack)
-        @test isapprox(numpy.array(xto), Array(xjl))
+        @test isapprox(sum(numpy.array(xto)), sum(xjl))
     end
 end
 
@@ -69,8 +69,8 @@ jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), (py"grad")(apply_lin
 @test length(grad) == length(params_np)
 @test size(grad[1]) == size(params_np[1])
 @test size(grad[2]) == size(params_np[2])
-@test isapprox(grad[1], jaxgrad[1])
-@test isapprox(grad[2], jaxgrad[2])
+@test isapprox((grad[1]), Array(jaxgrad[1]))
+@test isapprox(Array(grad[2]), Array(jaxgrad[2]))
 
 grad, = Zygote.gradient(z->sum(linwrap(params_np, z)), x)
 @test size(grad) == size(x)
@@ -82,4 +82,4 @@ def gradx(fn, params, x):
     return jax.grad(f2, argnums=(1,))(params, x)
 """
 jaxgrad = map(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), (py"gradx")(apply_lin, params, DLPack.share(x, pyfrom_dlpack)))
-@test isapprox(jaxgrad[1], grad)
+@test isapprox(Array(jaxgrad[1]), Array(grad))

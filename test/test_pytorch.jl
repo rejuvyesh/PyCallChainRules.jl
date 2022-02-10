@@ -1,6 +1,6 @@
 using PyCallChainRules: ReverseDimsArray
 
-using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, dlpack, pyto_dlpack, ispysetup
+using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, dlpack, pyto_dlpack, pyfrom_dlpack, ispysetup
 
 using Test
 using Zygote
@@ -8,20 +8,29 @@ using Flux
 using ChainRulesCore: NoTangent, AbstractZero
 import Random
 using PyCall
+using CUDA
 using DLPack
 
 if !ispysetup[]
     return
 end
 
+if CUDA.functional()
+    device = torch.device("cuda:0")
+else
+    device = torch.device("cpu")
+end
+
+#CUDA.allowscalar(true)
+
 function compare_grad_wrt_params(modelwrap, inputs...)
-    params = map(x -> torch.as_tensor(copy(ReverseDimsArray(x))).to(device = modelwrap.device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
-    torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->torch.as_tensor(PyReverseDims(copy(z))).to(dtype=modelwrap.dtype), inputs)...).sum()
-    torchgrad = map(x-> ReverseDimsArray(x.numpy()), torch.autograd.grad(torch_out, params))
+    params = map(x -> DLPack.share(x, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
+    torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->DLPack.share(z, pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device), inputs)...).sum()
+    torchgrad = map(x-> ReverseDimsArray(x.cpu().numpy()), torch.autograd.grad(torch_out, params))
     grad,  = Zygote.gradient(m->sum(m(inputs...)), modelwrap)
     @test length(torchgrad) == length(grad.params)
     for i in 1:length(grad.params)
-        @test isapprox(torchgrad[i], grad.params[i])
+        @test isapprox(sum(torchgrad[i]), sum(grad.params[i]))
     end
     @test length(grad.params) == length(modelwrap.params)
     @test grad.params[1] !== nothing
@@ -31,14 +40,14 @@ function compare_grad_wrt_params(modelwrap, inputs...)
 end
 
 function compare_grad_wrt_inputs(modelwrap, x)
-    params = map(z -> torch.as_tensor(copy(ReverseDimsArray(z))).to(device = modelwrap.device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
-    xtorch = torch.as_tensor(PyReverseDims(copy(x))).to(dtype=modelwrap.dtype).requires_grad_(true)
+    params = map(z -> DLPack.share(z, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
+    xtorch = DLPack.share(copy(x), pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device).requires_grad_(true)
     torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, xtorch).sum()
-    torchgrad = map(z-> ReverseDimsArray(copy(z.numpy())), torch.autograd.grad(torch_out, xtorch))[1]
-    grad, = Zygote.gradient(z->sum(modelwrap(z)), copy(x))
+    torchgrad = map(z-> ReverseDimsArray(copy(z.cpu().numpy())), torch.autograd.grad(torch_out, xtorch))[1]
+    grad, = Zygote.gradient(z->sum(modelwrap(z)), x)
     @test size(grad) == size(x)
     @test length(torchgrad) == length(grad)
-    @test isapprox(torchgrad, grad)
+    @test isapprox(sum(torchgrad), sum(grad))
 end
 
 # Random.seed!(42)
@@ -48,7 +57,7 @@ end
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
         xto = torch.randn(dims...)
         xjl = DLArray(xto, pyto_dlpack)
-        @test isapprox(xto.numpy(), xjl)
+        @test isapprox(sum(xto.numpy()), sum(xjl))
     end
 end
 
@@ -58,54 +67,37 @@ outdim = 2
 hiddendim = 4
 
 @testset "linear" begin
-    lin = torch.nn.Linear(indim, outdim)
-    torchparams = Tuple([copy(DLArray(p, pyto_dlpack)) for p in lin.parameters()]) # (outdim, indim), (outdim,)),
+    lin = torch.nn.Linear(indim, outdim).to(device=device)
     linwrap = TorchModuleWrapper(lin)
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], linwrap.params[i])
-    # end
+    if CUDA.functional()
+        linwrap = fmap(CUDA.cu, linwrap)
+    end    
     x = randn(Float32, indim, batchsize)
+    if CUDA.functional()
+        x = cu(x)
+    end
     y = linwrap(x)
-
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], linwrap.params[i] )
-    # end
     @test size(y) == (outdim, batchsize)
-    compare_grad_wrt_params(linwrap, deepcopy(x))
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], linwrap.params[i])
-    # end
-    compare_grad_wrt_inputs(linwrap, deepcopy(x))
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], linwrap.params[i])
-    # end
+    compare_grad_wrt_params(linwrap, x)
+    compare_grad_wrt_inputs(linwrap, x)
+
 end
 
 @testset "mlp" begin
-    mlp = torch.nn.Sequential(torch.nn.Linear(indim, hiddendim), torch.nn.ReLU(), torch.nn.Linear(hiddendim, outdim))
-    torchparams = Tuple([copy(DLArray(p, pyto_dlpack)) for p in mlp.parameters()])
+    mlp = torch.nn.Sequential(torch.nn.Linear(indim, hiddendim), torch.nn.ReLU(), torch.nn.Linear(hiddendim, outdim)).to(device=device)
     mlpwrap = TorchModuleWrapper(mlp)
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], mlpwrap.params[i])
-    # end
+    if CUDA.functional()
+        mlpwrap = fmap(CUDA.cu, mlpwrap)
+    end    
 
     x = randn(Float32, indim, batchsize)
+    if CUDA.functional()
+        x = cu(x)
+    end
     y = mlpwrap(x)
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], mlpwrap.params[i])
-    # end
-
     @test size(y) == (outdim, batchsize)
-    compare_grad_wrt_params(mlpwrap, deepcopy(x))
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], mlpwrap.params[i])
-    # end
-
-    compare_grad_wrt_inputs(mlpwrap, deepcopy(x))
-    # for i in 1:length(torchparams)
-    #     @test isapprox(torchparams[i], mlpwrap.params[i])
-    # end
-
+    compare_grad_wrt_params(mlpwrap, x)
+    compare_grad_wrt_inputs(mlpwrap, x)
 end
 # CRTU check
 # x = randn(Float32, indim, batchsize)
@@ -162,10 +154,16 @@ end
 
 # Flux check
 @testset "flux" begin
-    lin = torch.nn.Linear(indim, outdim)
+    lin = torch.nn.Linear(indim, outdim).to(device=device)
     linwrap = TorchModuleWrapper(lin)
     nn = Chain(Dense(4, 3), linwrap)
+    if CUDA.functional()
+        nn = Flux.gpu(nn)
+    end
     x2 = randn(Float32, 4, batchsize)
+    if CUDA.functional()
+        x2 = cu(x2)
+    end
     grad,  = Zygote.gradient(m->sum(m(x2)), nn)
     @test grad !== nothing    
 end
@@ -177,12 +175,17 @@ end
             torch.nn.ReLU(),
             torch.nn.Conv2d(2,6,5),
             torch.nn.ReLU()
-            )
+            ).to(device=device)
     modelwrap = TorchModuleWrapper(model)
-
+    if CUDA.functional()
+        modelwrap = fmap(CUDA.cu, modelwrap)
+    end
     input = randn(Float32, 12, 12, 1, batchsize)
-    #output = modelwrap(input)
+    if CUDA.functional()
+        input = cu(input)
+    end
+    output = modelwrap(input)
 
-    compare_grad_wrt_params(modelwrap, deepcopy(input))
-    compare_grad_wrt_inputs(modelwrap, deepcopy(input))
+    compare_grad_wrt_params(modelwrap, input)
+    compare_grad_wrt_inputs(modelwrap, input)
 end

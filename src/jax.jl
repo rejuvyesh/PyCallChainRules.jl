@@ -3,7 +3,7 @@ module Jax
 using PyCall
 using ChainRulesCore
 using DLPack
-using CUDA
+using Functors: fmap
 
 using ..PyCallChainRules: ReverseDimsArray, maybecontiguous
 
@@ -18,28 +18,21 @@ const ispysetup = Ref{Bool}(false)
 pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
 
-mapover(f, iselement, x) =
-                  iselement(x) ? f(x) : map(e -> mapover(f, iselement, e), x)                
-
 struct JaxFunctionWrapper
     jaxfn::PyObject
 end
 
 function (wrap::JaxFunctionWrapper)(args...)
     # TODO: handle multiple outputs
-    out = (wrap.jaxfn(mapover(x->DLPack.share(x, pyfrom_dlpack), x-> x isa Array || x isa CuArray, args)...))
+    out = (wrap.jaxfn(fmap(x->DLPack.share(x, pyfrom_dlpack), args)...))
     return ReverseDimsArray(DLArray(out, pyto_dlpack))
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     project = ProjectTo(args)
-    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, mapover(x->DLPack.share(x, pyfrom_dlpack), x-> x isa Array || x isa CuArray, args)...)
+    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, pyfrom_dlpack), args)...)
     function JaxFunctionWrapper_pullback(Δ)
         cΔ = maybecontiguous(Δ)
-        # TODO: hack for FillArrays
-        if CUDA.functional()
-            cΔ = cu(cΔ)
-        end
         dlΔ = DLPack.share(cΔ, pyfrom_dlpack)
         tangent_vals = mapover(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), x-> x isa PyObject, jax_vjpfun(dlΔ))
         return (NoTangent(), project(tangent_vals)...)
