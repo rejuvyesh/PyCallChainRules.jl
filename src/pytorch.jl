@@ -9,7 +9,7 @@ using Functors: @functor
 import DLPack
 DLPack.share(A::StridedArray, from_dlpack::Function) = DLPack.share(A, PyObject, from_dlpack)
 
-using ..PyCallChainRules: ReverseDimsArray, maybecontiguous
+using ..PyCallChainRules:  maybecontiguous
 
 const inspect = PyNULL()
 const torch = PyNULL()

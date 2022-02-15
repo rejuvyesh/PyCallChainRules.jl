@@ -1,5 +1,3 @@
-using PyCallChainRules: ReverseDimsArray
-
 using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, dlpack, pyto_dlpack, pyfrom_dlpack, ispysetup
 
 using Test
@@ -26,7 +24,7 @@ end
 function compare_grad_wrt_params(modelwrap, inputs...)
     params = map(x -> DLPack.share(x, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
     torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->DLPack.share(z, pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device), inputs)...).sum()
-    torchgrad = map(x-> ReverseDimsArray(x.cpu().numpy()), torch.autograd.grad(torch_out, params))
+    torchgrad = map(x-> (x.cpu().numpy()), torch.autograd.grad(torch_out, params))
     grad,  = Zygote.gradient(m->sum(m(inputs...)), modelwrap)
     @test length(torchgrad) == length(grad.params)
     for i in 1:length(grad.params)
@@ -43,7 +41,7 @@ function compare_grad_wrt_inputs(modelwrap, x)
     params = map(z -> DLPack.share(z, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
     xtorch = DLPack.share(copy(x), pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device).requires_grad_(true)
     torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, xtorch).sum()
-    torchgrad = map(z-> ReverseDimsArray(copy(z.cpu().numpy())), torch.autograd.grad(torch_out, xtorch))[1]
+    torchgrad = map(z-> (copy(z.cpu().numpy())), torch.autograd.grad(torch_out, xtorch))[1]
     grad, = Zygote.gradient(z->sum(modelwrap(z)), x)
     @test size(grad) == size(x)
     @test length(torchgrad) == length(grad)
@@ -57,6 +55,7 @@ end
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
         xto = torch.randn(dims...)
         xjl = DLPack.wrap(xto, pyto_dlpack)
+        @test Tuple(xto.size()) == reverse(size(xjl))
         @test isapprox(sum(xto.numpy()), sum(xjl))
     end
 end

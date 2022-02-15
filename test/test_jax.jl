@@ -1,5 +1,3 @@
-using PyCallChainRules: ReverseDimsArray
-
 using PyCallChainRules.Jax: JaxFunctionWrapper, jax, numpy, stax, pyto_dlpack, pyfrom_dlpack, ispysetup
 
 using Test
@@ -15,11 +13,6 @@ using DLPack
 
 if !ispysetup[]
     return
-end
-
-
-function reversedims(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
-    permutedims(a, N:-1:1)
 end
 
 @testset "dlpack" begin

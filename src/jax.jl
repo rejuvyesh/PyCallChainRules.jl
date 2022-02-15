@@ -5,7 +5,7 @@ using ChainRulesCore
 using DLPack
 using Functors: fmap
 
-using ..PyCallChainRules: ReverseDimsArray, maybecontiguous
+using ..PyCallChainRules: maybecontiguous
 
 import DLPack
 DLPack.share(A::StridedArray, from_dlpack::Function) = DLPack.share(A, PyObject, from_dlpack)
