@@ -1,10 +1,11 @@
 module PyCallChainRules
 
 using DLPack
-using Adapt
 using Functors
 using FillArrays
 using CUDA
+
+
 
 function ReverseDimsArray(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
     PermutedDimsArray(a, N:-1:1)

@@ -7,6 +7,9 @@ using Functors: fmap
 
 using ..PyCallChainRules: ReverseDimsArray, maybecontiguous
 
+import DLPack
+DLPack.share(A::StridedArray, from_dlpack::Function) = DLPack.share(A, PyObject, from_dlpack)
+
 const inspect = PyNULL()
 const jax = PyNULL()
 const dlpack = PyNULL()
@@ -25,7 +28,7 @@ end
 function (wrap::JaxFunctionWrapper)(args...)
     # TODO: handle multiple outputs
     out = (wrap.jaxfn(fmap(x->DLPack.share(x, pyfrom_dlpack), args)...))
-    return ReverseDimsArray(DLArray(out, pyto_dlpack))
+    return (DLPack.wrap(out, pyto_dlpack))
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
@@ -34,10 +37,10 @@ function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     function JaxFunctionWrapper_pullback(Δ)
         cΔ = maybecontiguous(Δ)
         dlΔ = DLPack.share(cΔ, pyfrom_dlpack)
-        tangent_vals = mapover(x->ReverseDimsArray(DLArray(x, pyto_dlpack)), x-> x isa PyObject, jax_vjpfun(dlΔ))
+        tangent_vals = fmap(x->(DLPack.wrap(x, pyto_dlpack)), jax_vjpfun(dlΔ))
         return (NoTangent(), project(tangent_vals)...)
     end
-    return ReverseDimsArray(DLArray(jax_primal, pyto_dlpack)), JaxFunctionWrapper_pullback
+    return (DLPack.wrap(jax_primal, pyto_dlpack)), JaxFunctionWrapper_pullback
 end
 
 

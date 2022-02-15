@@ -5,7 +5,9 @@ using PyCall
 using ChainRulesCore
 using DLPack
 using Functors: @functor
-using Adapt: adapt
+
+import DLPack
+DLPack.share(A::StridedArray, from_dlpack::Function) = DLPack.share(A, PyObject, from_dlpack)
 
 using ..PyCallChainRules: ReverseDimsArray, maybecontiguous
 
@@ -18,7 +20,6 @@ const ispysetup = Ref{Bool}(false)
 pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
 
-reversedims(x::AbstractArray{T,N}) where {T,N} = permutedims(x, N:-1:1) 
 
 struct TorchModuleWrapper
     torch_stateless_module::PyObject
@@ -39,9 +40,8 @@ function TorchModuleWrapper(torch_module)
     pybuiltin("isinstance")(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
-    # TODO: should not require this reversedims
     jlparams = map(params) do x
-        reversedims(adapt(Array, DLArray(x.cpu(), pyto_dlpack)))
+        (convert(Array, DLPack.wrap(x.cpu(), pyto_dlpack)))
     end
     return TorchModuleWrapper(funmod, dtype, jlparams, buffers)
 end
@@ -52,7 +52,7 @@ function (wrap::TorchModuleWrapper)(args...)
     params = wrap.params
     tensor_out = wrap.torch_stateless_module(Tuple(map(x -> DLPack.share(x, pyfrom_dlpack).requires_grad_(true), params)),
         wrap.buffers, map(x -> DLPack.share(x, pyfrom_dlpack), args)...)
-    res = ReverseDimsArray(DLArray(tensor_out, pyto_dlpack))
+    res = (DLPack.wrap(tensor_out, pyto_dlpack))
     return res
 end
 
@@ -63,11 +63,11 @@ function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
         torch_tangent_vals = torch_vjpfun(DLPack.share((maybecontiguous(Δ)), pyfrom_dlpack))
-        jlparams_tangents = map(x -> ReverseDimsArray(DLArray(x, pyto_dlpack)), torch_tangent_vals[1])
-        args_tangents = project(map(x -> ReverseDimsArray(DLArray(x, pyto_dlpack)), torch_tangent_vals[2:end]))
+        jlparams_tangents = map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[1])
+        args_tangents = project(map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
-    res = ReverseDimsArray(DLArray(torch_primal, pyto_dlpack))
+    res = (DLPack.wrap(torch_primal, pyto_dlpack))
     return res, TorchModuleWrapper_pullback
 end
 

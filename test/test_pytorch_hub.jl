@@ -8,6 +8,7 @@ using ChainRulesCore: NoTangent, AbstractZero
 import Random
 using PyCall
 using Functors: fmap
+using DLPack
 using CUDA
 
 if !ispysetup[]
