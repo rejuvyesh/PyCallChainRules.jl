@@ -53,10 +53,10 @@ end
 
 @testset "dlpack" begin
     for dims in ((10,), (1, 10), (2, 3, 5), (2, 3, 4, 5))
-        xto = torch.randn(dims...)
+        xto = torch.randn(dims..., device=device)
         xjl = DLPack.wrap(xto, pyto_dlpack)
         @test Tuple(xto.size()) == reverse(size(xjl))
-        @test isapprox(sum(xto.numpy()), sum(xjl))
+        @test isapprox(sum(xto.cpu().numpy()), sum(xjl))
     end
 end
 
