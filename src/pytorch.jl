@@ -6,8 +6,7 @@ using ChainRulesCore
 using DLPack
 using Functors: @functor
 
-import DLPack
-DLPack.share(A::StridedArray, from_dlpack::Function) = DLPack.share(A, PyObject, from_dlpack)
+
 
 using ..PyCallChainRules:  maybecontiguous
 
@@ -50,19 +49,19 @@ end
 function (wrap::TorchModuleWrapper)(args...)
     # TODO: handle multiple outputs
     params = wrap.params
-    tensor_out = wrap.torch_stateless_module(Tuple(map(x -> DLPack.share(x, pyfrom_dlpack).requires_grad_(true), params)),
-        wrap.buffers, map(x -> DLPack.share(x, pyfrom_dlpack), args)...)
+    tensor_out = wrap.torch_stateless_module(Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
+        wrap.buffers, map(x -> DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
     res = (DLPack.wrap(tensor_out, pyto_dlpack))
     return res
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
     params = wrap.params
-    torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> DLPack.share((x), pyfrom_dlpack).requires_grad_(true), params)),
-        map(x -> DLPack.share((x), pyfrom_dlpack).requires_grad_(true), args)...)
+    torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
+        map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), args)...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = torch_vjpfun(DLPack.share((maybecontiguous(Δ)), pyfrom_dlpack))
+        torch_tangent_vals = torch_vjpfun(DLPack.share(maybecontiguous(Δ), PyObject, pyfrom_dlpack))
         jlparams_tangents = map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[1])
         args_tangents = project(map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)

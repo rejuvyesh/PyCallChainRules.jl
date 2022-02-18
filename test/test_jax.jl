@@ -58,7 +58,7 @@ def grad(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2)(params, x)
 """
-jaxgrad = map(x->(DLPack.wrap(x, pyto_dlpack)), (py"grad")(apply_lin, params, DLPack.share(x, pyfrom_dlpack)))
+jaxgrad = map(x->(DLPack.wrap(x, pyto_dlpack)), (py"grad")(apply_lin, params, DLPack.share(x, PyObject, pyfrom_dlpack)))
 @test length(grad) == length(params_np)
 @test size(grad[1]) == size(params_np[1])
 @test size(grad[2]) == size(params_np[2])
@@ -74,5 +74,5 @@ def gradx(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2, argnums=(1,))(params, x)
 """
-jaxgrad = map(x->(DLPack.wrap(x, pyto_dlpack)), (py"gradx")(apply_lin, params, DLPack.share(x, pyfrom_dlpack)))
+jaxgrad = map(x->(DLPack.wrap(x, pyto_dlpack)), (py"gradx")(apply_lin, params, DLPack.share(x, PyObject, pyfrom_dlpack)))
 @test isapprox(Array(jaxgrad[1]), Array(grad))

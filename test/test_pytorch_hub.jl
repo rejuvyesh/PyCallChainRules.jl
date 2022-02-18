@@ -61,8 +61,8 @@ end
 
 grad,  = Zygote.gradient(m->sum(m(x)), modelwrap)
 @test length(grad.params) == length(modelwrap.params)
-params = map(x ->  DLPack.share(x, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), modelwrap.params)
-torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z-> DLPack.share(z, pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device), [x])...).sum()
+params = map(x ->  DLPack.share(x, PyObject, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), modelwrap.params)
+torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z-> DLPack.share(z, PyObject, pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device), [x])...).sum()
 torchgrad = map(x-> x.cpu().numpy(), torch.autograd.grad(torch_out, params))
 @test length(torchgrad) == length(grad.params)
 for i in 1:length(grad.params)

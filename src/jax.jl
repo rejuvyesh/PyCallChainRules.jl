@@ -7,9 +7,6 @@ using Functors: fmap
 
 using ..PyCallChainRules: maybecontiguous
 
-import DLPack
-DLPack.share(A::StridedArray, from_dlpack::Function) = DLPack.share(A, PyObject, from_dlpack)
-
 const inspect = PyNULL()
 const jax = PyNULL()
 const dlpack = PyNULL()
@@ -27,16 +24,16 @@ end
 
 function (wrap::JaxFunctionWrapper)(args...)
     # TODO: handle multiple outputs
-    out = (wrap.jaxfn(fmap(x->DLPack.share(x, pyfrom_dlpack), args)...))
+    out = (wrap.jaxfn(fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...))
     return (DLPack.wrap(out, pyto_dlpack))
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
     project = ProjectTo(args)
-    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, pyfrom_dlpack), args)...)
+    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
     function JaxFunctionWrapper_pullback(Δ)
         cΔ = maybecontiguous(Δ)
-        dlΔ = DLPack.share(cΔ, pyfrom_dlpack)
+        dlΔ = DLPack.share(cΔ, PyObject, pyfrom_dlpack)
         tangent_vals = fmap(x->(DLPack.wrap(x, pyto_dlpack)), jax_vjpfun(dlΔ))
         return (NoTangent(), project(tangent_vals)...)
     end
