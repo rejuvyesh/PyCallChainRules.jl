@@ -1,74 +1,91 @@
 module Torch
 
 using PyCall
+
 using ChainRulesCore
+using DLPack
+using Functors: @functor
+using Adapt
+
+
+using ..PyCallChainRules: PyAdaptor
 
 const inspect = PyNULL()
 const torch = PyNULL()
 const functorch = PyNULL()
-
+const dlpack = PyNULL()
 const ispysetup = Ref{Bool}(false)
 
-function reversedims(a::AbstractArray{T,N}) where {T<:AbstractFloat,N}
-    permutedims(a, N:-1:1)
-end
+pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
+pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
+
 
 struct TorchModuleWrapper
     torch_stateless_module::PyObject
     dtype::PyObject
-    device::PyObject
     params::Tuple
     buffers::Tuple
 end
 
+@functor TorchModuleWrapper (params,)
 
-Base.show(io::IO, f::TorchModuleWrapper) = print(io, f.torch_stateless_module, " ", f.dtype, " ", f.device, "params size=", size.(f.params))
+Base.show(io::IO, f::TorchModuleWrapper) = print(io, f.torch_stateless_module, " ", f.dtype, " ", " params size=", size.(f.params))
 
 Base.length(f::TorchModuleWrapper) = length(f.params)
 Base.iterate(f::TorchModuleWrapper) = iterate(f.params)
 Base.iterate(f::TorchModuleWrapper, state) = iterate(f.params, state)
 
-function TorchModuleWrapper(torch_module, device)
+function TorchModuleWrapper(torch_module)
     pybuiltin("isinstance")(torch_module, torch.nn.Module) || error("Not a torch.nn.Module")
-    torch_module = torch_module.to(device)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
-    jlparams = map(x -> x.detach().numpy(), params)
-    return TorchModuleWrapper(funmod, dtype, device, jlparams, buffers)
+    jlparams = map(params) do x
+        DLPack.wrap(x, pyto_dlpack)
+    end
+    return TorchModuleWrapper(funmod, dtype, jlparams, buffers)
 end
 
-function TorchModuleWrapper(torch_module)
-    device = torch.cuda.is_available() ? torch.device("cuda:0") : torch.device("cpu")
-    TorchModuleWrapper(torch_module, device)
-end
 
-function (wrap::TorchModuleWrapper)(args...)
+function (wrap::TorchModuleWrapper)(args...; kwargs...)
     # TODO: handle multiple outputs
-    tensor_out = wrap.torch_stateless_module(Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device), args)...)
-    return reversedims(tensor_out.detach().numpy())
+    params = wrap.params
+    tensor_out = wrap.torch_stateless_module(Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
+        wrap.buffers, map(x -> DLPack.share(x, PyObject, pyfrom_dlpack), args)...; kwargs...)
+    res = DLPack.wrap(tensor_out, pyto_dlpack)
+    return res
 end
 
-function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
-    torch_primal, torch_vjpfun = functorch.vjp(wrap.torch_stateless_module, Tuple(map(x -> torch.as_tensor(x).to(device = wrap.device, dtype = wrap.dtype).requires_grad_(true), wrap.params)),
-        wrap.buffers, map(x -> torch.as_tensor(PyReverseDims(x)).to(dtype = wrap.dtype, device = wrap.device).requires_grad_(true), args)...)
+function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...; kwargs...)
+    T = typeof(first(args))
+    params = wrap.params
+    torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
+        map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), args)...; kwargs...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = torch_vjpfun(torch.as_tensor(PyReverseDims(Δ)).to(dtype = wrap.dtype, device = wrap.device))
-        jlparams_tangents = map(x -> x.detach().numpy(), torch_tangent_vals[1])
-        args_tangents = project(map(x -> reversedims(x.detach().numpy()), torch_tangent_vals[3:end]))
-        return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), device = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
+        torch_tangent_vals = torch_vjpfun(DLPack.share(Adapt.adapt(PyAdaptor{T}, Δ), PyObject, pyfrom_dlpack))
+        jlparams_tangents = map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[1])
+        args_tangents = project(map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[2:end]))
+        return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
-    return reversedims(torch_primal.detach().numpy()), TorchModuleWrapper_pullback
+    res = DLPack.wrap(torch_primal, pyto_dlpack)
+    return res, TorchModuleWrapper_pullback
 end
 
 
 function __init__()
     try
         copy!(torch, pyimport("torch"))
+        copy!(dlpack, pyimport("torch.utils.dlpack"))
         copy!(functorch, pyimport("functorch"))
         copy!(inspect, pyimport("inspect"))
         ispysetup[] = true
+        py"""
+        def buffer_implicit(fn, buffers):
+            def newfn(params, inputs):
+                return fn(params, buffers, inputs)
+            
+            return newfn
+        """        
     catch err
         @warn """PyCallChainRules.jl has failed to import torch and functorch from Python.
                  Please make sure these are installed. 

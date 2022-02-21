@@ -5,17 +5,24 @@
 
 While Julia is great, there are still a lot of existing useful differentiable python code in PyTorch, Jax, etc. Given PyCall.jl is already so great and seamless, one might wonder what it takes to differentiate through those `pycall`s. This library aims for that ideal.
 
+Thanks to [@pabloferz](https://github.cim/pabloferz), this works on both CPU and GPU without any array copies via [DLPack.jl](https://github.com/pabloferz/DLPack.jl).
+
 ## Basic Usage
 
 
 ### PyTorch
 
-**Install Python dependencies**:
+#### CPU only
+
+##### Install Python dependencies
+
 ```julia
 using PyCall
 run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html --upgrade`)
 run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
 ```
+
+##### Example
 
 ```julia
 using PyCallChainRules.Torch: TorchModuleWrapper, torch
@@ -35,16 +42,61 @@ loss(m, x, y) = sum(m(x) .- target)
 grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 ```
 
-### Jax
+#### GPU
 
-**Install Python dependencies**:
+##### Install Python dependencies
+
 ```julia
 using PyCall
-run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\])
+# For CUDA 11
+run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cu111/torch_nightly.html 
+--upgrade`)
+run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
+```
+
+##### Example
+
+```julia
+using CUDA
+using PyCallChainRules.Torch: TorchModuleWrapper, torch
+using Zygote
+
+@assert CUDA.isfunctional()
+
+indim = 32
+outdim = 16
+torch_module = torch.nn.Linear(indim, outdim).to(device=torch.device("cuda:0")) # Can be anything subclassing torch.nn.Module
+jlwrap = TorchModuleWrapper(torch_module)
+
+batchsize = 64
+input = CUDA.cu(randn(Float32, indim, batchsize))
+output = jlwrap(input)
+
+target = CUDA.cu(randn(Float32, outdim, batchsize))
+loss(m, x, y) = sum(m(x) .- target)
+grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
+```
+
+
+### Jax
+
+#### CPU only 
+
+##### Install Python dependencies
+```julia
+using PyCall
+run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]`) # for cpu version
+```
+
+#### GPU
+
+##### Install Python dependencies
+```julia
+using PyCall
+run(`$(PyCall.pyprogramname) -m pip install jax\["cuda"\] -f https://storage.googleapis.com/jax-releases/jax_releases.html`)
 ```
 
 ## Current Limitations / TODO
 
-- CPU only
-- Lots of array copies
 - Assumes wrapped python functions are single output only
+- No keyword argument support
