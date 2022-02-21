@@ -1,7 +1,6 @@
 using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, ispysetup, pyfrom_dlpack
 
 using Test
-using ChainRulesTestUtils
 using Zygote
 using Flux
 using ChainRulesCore: NoTangent, AbstractZero

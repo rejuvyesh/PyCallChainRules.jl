@@ -5,10 +5,10 @@ using PyCall
 using ChainRulesCore
 using DLPack
 using Functors: @functor
+using Adapt
 
 
-
-using ..PyCallChainRules:  maybecontiguous
+using ..PyCallChainRules: PyAdaptor
 
 const inspect = PyNULL()
 const torch = PyNULL()
@@ -40,7 +40,7 @@ function TorchModuleWrapper(torch_module)
     funmod, params, buffers = functorch.make_functional_with_buffers(torch_module)
     dtype = params[1].dtype
     jlparams = map(params) do x
-        (convert(Array, DLPack.wrap(x.cpu(), pyto_dlpack)))
+        DLPack.wrap(x, pyto_dlpack)
     end
     return TorchModuleWrapper(funmod, dtype, jlparams, buffers)
 end
@@ -51,22 +51,23 @@ function (wrap::TorchModuleWrapper)(args...)
     params = wrap.params
     tensor_out = wrap.torch_stateless_module(Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
         wrap.buffers, map(x -> DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
-    res = (DLPack.wrap(tensor_out, pyto_dlpack))
+    res = DLPack.wrap(tensor_out, pyto_dlpack)
     return res
 end
 
 function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
+    T = typeof(first(args))
     params = wrap.params
     torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
         map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), args)...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
-        torch_tangent_vals = torch_vjpfun(DLPack.share(maybecontiguous(Δ), PyObject, pyfrom_dlpack))
+        torch_tangent_vals = torch_vjpfun(DLPack.share(Adapt.adapt_storage(PyAdaptor{T}, Δ), PyObject, pyfrom_dlpack))
         jlparams_tangents = map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[1])
         args_tangents = project(map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
-    res = (DLPack.wrap(torch_primal, pyto_dlpack))
+    res = DLPack.wrap(torch_primal, pyto_dlpack)
     return res, TorchModuleWrapper_pullback
 end
 

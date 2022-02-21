@@ -4,8 +4,9 @@ using PyCall
 using ChainRulesCore
 using DLPack
 using Functors: fmap
+using Adapt
 
-using ..PyCallChainRules: maybecontiguous
+using ..PyCallChainRules: PyAdaptor
 
 const inspect = PyNULL()
 const jax = PyNULL()
@@ -29,10 +30,11 @@ function (wrap::JaxFunctionWrapper)(args...)
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
+    T = typeof(first(args))
     project = ProjectTo(args)
     jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
     function JaxFunctionWrapper_pullback(Δ)
-        cΔ = maybecontiguous(Δ)
+        cΔ = Adapt.adapt_storage(PyAdaptor{T}, Δ)
         dlΔ = DLPack.share(cΔ, PyObject, pyfrom_dlpack)
         tangent_vals = fmap(x->(DLPack.wrap(x, pyto_dlpack)), jax_vjpfun(dlΔ))
         return (NoTangent(), project(tangent_vals)...)
