@@ -23,16 +23,16 @@ struct JaxFunctionWrapper
     jaxfn::PyObject
 end
 
-function (wrap::JaxFunctionWrapper)(args...)
+function (wrap::JaxFunctionWrapper)(args...; kwargs...)
     # TODO: handle multiple outputs
     out = (wrap.jaxfn(fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...))
     return (DLPack.wrap(out, pyto_dlpack))
 end
 
-function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...)
+function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...; kwargs...)
     T = typeof(first(args))
     project = ProjectTo(args)
-    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
+    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...; kwargs...)
     function JaxFunctionWrapper_pullback(Δ)
         cΔ = Adapt.adapt(PyAdaptor{T}, Δ)
         dlΔ = DLPack.share(cΔ, PyObject, pyfrom_dlpack)

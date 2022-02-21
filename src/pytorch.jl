@@ -46,20 +46,20 @@ function TorchModuleWrapper(torch_module)
 end
 
 
-function (wrap::TorchModuleWrapper)(args...)
+function (wrap::TorchModuleWrapper)(args...; kwargs...)
     # TODO: handle multiple outputs
     params = wrap.params
     tensor_out = wrap.torch_stateless_module(Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
-        wrap.buffers, map(x -> DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
+        wrap.buffers, map(x -> DLPack.share(x, PyObject, pyfrom_dlpack), args)...; kwargs...)
     res = DLPack.wrap(tensor_out, pyto_dlpack)
     return res
 end
 
-function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...)
+function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...; kwargs...)
     T = typeof(first(args))
     params = wrap.params
     torch_primal, torch_vjpfun = functorch.vjp(py"buffer_implicit"(wrap.torch_stateless_module, wrap.buffers), Tuple(map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), params)),
-        map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), args)...)
+        map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).requires_grad_(true), args)...; kwargs...)
     project = ProjectTo(args)
     function TorchModuleWrapper_pullback(Δ)
         torch_tangent_vals = torch_vjpfun(DLPack.share(Adapt.adapt(PyAdaptor{T}, Δ), PyObject, pyfrom_dlpack))
