@@ -65,5 +65,5 @@ torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z-> 
 torchgrad = map(x-> x.cpu().numpy(), torch.autograd.grad(torch_out, params))
 @test length(torchgrad) == length(grad.params)
 for i in 1:length(grad.params)
-    @test isapprox(sum(torchgrad[i]), sum(grad.params[i]))
+    @test isapprox(sum(torchgrad[i]), sum(grad.params[i]), atol=1e-3, rtol=1e-3)
 end
