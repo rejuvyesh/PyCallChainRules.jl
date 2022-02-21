@@ -12,15 +12,17 @@ Thanks to [@pabloferz](https://github.cim/pabloferz), this works on both CPU and
 
 ### PyTorch
 
-#### Install Python dependencies
+#### CPU only
 
-**CPU only**
+##### Install Python dependencies
 
 ```julia
 using PyCall
 run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html --upgrade`)
 run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
 ```
+
+##### Example
 
 ```julia
 using PyCallChainRules.Torch: TorchModuleWrapper, torch
@@ -40,7 +42,10 @@ loss(m, x, y) = sum(m(x) .- target)
 grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 ```
 
-**GPU**
+#### GPU
+
+##### Install Python dependencies
+
 ```julia
 using PyCall
 # For CUDA 11
@@ -48,6 +53,8 @@ run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pyto
 --upgrade`)
 run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
 ```
+
+##### Example
 
 ```julia
 using CUDA
@@ -73,10 +80,19 @@ grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 
 ### Jax
 
-#### Install Python dependencies**
+#### CPU only 
+
+##### Install Python dependencies
 ```julia
 using PyCall
 run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]) # for cpu version
+```
+
+#### GPU
+
+##### Install Python dependencies
+```julia
+uisng PyCall
 ```
 
 ## Current Limitations / TODO
