@@ -85,14 +85,15 @@ grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 ##### Install Python dependencies
 ```julia
 using PyCall
-run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]) # for cpu version
+run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]`) # for cpu version
 ```
 
 #### GPU
 
 ##### Install Python dependencies
 ```julia
-uisng PyCall
+using PyCall
+run(`$(PyCall.pyprogramname) -m pip install jax\["cuda"\] -f https://storage.googleapis.com/jax-releases/jax_releases.html`)
 ```
 
 ## Current Limitations / TODO
