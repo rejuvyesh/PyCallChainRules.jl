@@ -73,7 +73,7 @@ input = CUDA.cu(randn(Float32, indim, batchsize))
 output = jlwrap(input)
 
 target = CUDA.cu(randn(Float32, outdim, batchsize))
-loss(m, x, y) = sum(m(x) .- target)
+loss(m, x, y) = sum(m(x) .- y)
 grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 ```
 
@@ -88,6 +88,26 @@ using PyCall
 run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]`) # for cpu version
 ```
 
+##### Example
+```julia
+using PyCallChainRules.Jax: JaxFunctionWrapper, jax, stax, pyto_dlpack
+
+batchsize = 64
+indim = 32
+outdim = 16
+
+init_lin, apply_lin = stax.Dense(outdim)
+_, params = init_lin(jax.random.PRNGKey(0), (-1, indim))
+params_jl = map(x->DLPack.wrap(x, pyto_dlpack), params)
+jlwrap = JaxFunctionWrapper(jax.jit(apply_lin))
+input = randn(Float32, indim, batchsize)
+output = jlwrap(params_jl, input)
+
+target = randn(Float32, outdim, batchsize)
+loss(p, x, y) = sum(jlwrap(p, x) .- y)
+grad, = Zygote.gradient(p->loss(p, input, target), params_jl)
+```
+
 #### GPU
 
 ##### Install Python dependencies
@@ -95,6 +115,30 @@ run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]`) # for cpu version
 using PyCall
 run(`$(PyCall.pyprogramname) -m pip install jax\["cuda"\] -f https://storage.googleapis.com/jax-releases/jax_releases.html`)
 ```
+
+##### Example
+```julia
+using PyCallChainRules.Jax: JaxFunctionWrapper, jax, stax
+using CUDA
+
+using PyCallChainRules.Jax: JaxFunctionWrapper, jax, stax, pyto_dlpack
+
+batchsize = 64
+indim = 32
+outdim = 16
+
+init_lin, apply_lin = stax.Dense(outdim)
+_, params = init_lin(jax.random.PRNGKey(0), (-1, indim))
+params_jl = map(x->DLPack.wrap(x, pyto_dlpack), params)
+jlwrap = JaxFunctionWrapper(jax.jit(apply_lin))
+input = CUDA.cu(randn(Float32, indim, batchsize))
+output = jlwrap(params_jl, input)
+
+target = CUDA.cu(randn(Float32, outdim, batchsize))
+loss(p, x, y) = sum(jlwrap(p, x) .- y)
+grad, = Zygote.gradient(p->loss(p, input, target), params_jl)
+```
+
 
 ## Current Limitations / TODO
 
