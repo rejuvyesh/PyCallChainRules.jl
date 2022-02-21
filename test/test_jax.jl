@@ -7,8 +7,6 @@ using CUDA
 using Random
 using PyCall
 using DLPack
-#using Flux
-
 
 
 if !ispysetup[]
@@ -31,7 +29,7 @@ outdim = 2
 
 init_lin, apply_lin = stax.Dense(outdim)
 _, params = init_lin(jax.random.PRNGKey(0), (-1, indim))
-params_np = map(x->((DLPack.wrap(x, pyto_dlpack))), params)
+params_np = map(x->DLPack.wrap(x, pyto_dlpack), params)
 linwrap = JaxFunctionWrapper(apply_lin)
 x = randn(Float32, indim, batchsize)
 if CUDA.functional()
@@ -40,9 +38,6 @@ if CUDA.functional()
 end
 y = linwrap(params_np, x)
 @test size(y) == (outdim, batchsize)
-
-# CRTU check TODO
-#test_rrule(linwrap, params_np, x; check_inferred=false, check_thunked_output_tangent=false, rtol=1e-4, atol=1e-4)
 
 # Zygote check
 if CUDA.functional()
@@ -58,7 +53,7 @@ def grad(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2)(params, x)
 """
-jaxgrad = map(x->(DLPack.wrap(x, pyto_dlpack)), (py"grad")(apply_lin, params, DLPack.share(x, PyObject, pyfrom_dlpack)))
+jaxgrad = map(x->DLPack.wrap(x, pyto_dlpack), (py"grad")(apply_lin, params, DLPack.share(x, PyObject, pyfrom_dlpack)))
 @test length(grad) == length(params_np)
 @test size(grad[1]) == size(params_np[1])
 @test size(grad[2]) == size(params_np[2])
@@ -74,5 +69,5 @@ def gradx(fn, params, x):
     f2 = lambda p, z: jnp.sum(fn(p, z))
     return jax.grad(f2, argnums=(1,))(params, x)
 """
-jaxgrad = map(x->(DLPack.wrap(x, pyto_dlpack)), (py"gradx")(apply_lin, params, DLPack.share(x, PyObject, pyfrom_dlpack)))
+jaxgrad = map(x->DLPack.wrap(x, pyto_dlpack), (py"gradx")(apply_lin, params, DLPack.share(x, PyObject, pyfrom_dlpack)))
 @test isapprox(Array(jaxgrad[1]), Array(grad))

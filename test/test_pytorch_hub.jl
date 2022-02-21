@@ -13,11 +13,13 @@ using CUDA
 if !ispysetup[]
     return
 end
+
 if CUDA.functional()
     device = torch.device("cuda:0")
 else
     device = torch.device("cpu")
 end
+
 py"""
 import torch
 def bn2group(module):
@@ -56,7 +58,6 @@ x = randn(Float32, reverse((1, 3, 224, 224)))
 if CUDA.functional()
     x = CUDA.cu(x)
 end
-#y = modelwrap(x)
 
 grad,  = Zygote.gradient(m->sum(m(x)), modelwrap)
 @test length(grad.params) == length(modelwrap.params)
