@@ -12,7 +12,10 @@ Thanks to [@pabloferz](https://github.cim/pabloferz), this works on both CPU and
 
 ### PyTorch
 
-**Install Python dependencies**:
+#### Install Python dependencies
+
+**CPU only**
+
 ```julia
 using PyCall
 run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html --upgrade`)
@@ -37,9 +40,40 @@ loss(m, x, y) = sum(m(x) .- target)
 grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 ```
 
+**GPU**
+```julia
+using PyCall
+# For CUDA 11
+run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cu111/torch_nightly.html 
+--upgrade`)
+run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
+```
+
+```julia
+using CUDA
+using PyCallChainRules.Torch: TorchModuleWrapper, torch
+using Zygote
+
+@assert CUDA.isfunctional()
+
+indim = 32
+outdim = 16
+torch_module = torch.nn.Linear(indim, outdim).to(device=torch.device("cuda:0")) # Can be anything subclassing torch.nn.Module
+jlwrap = TorchModuleWrapper(torch_module)
+
+batchsize = 64
+input = CUDA.cu(randn(Float32, indim, batchsize))
+output = jlwrap(input)
+
+target = CUDA.cu(randn(Float32, outdim, batchsize))
+loss(m, x, y) = sum(m(x) .- target)
+grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
+```
+
+
 ### Jax
 
-**Install Python dependencies**:
+#### Install Python dependencies**
 ```julia
 using PyCall
 run(`$(PyCall.pyprogramname) -m pip install jax\["cpu"\]) # for cpu version
