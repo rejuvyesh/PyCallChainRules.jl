@@ -1,7 +1,7 @@
 name = "PyCallChainRules"
 uuid = "b12ccfe2-7326-416f-9f4f-cd3183bd9fe8"
 authors = ["rejuvyesh <mail@rejuvyesh.com> and contributors"]
-version = "0.1.1"
+version = "0.2.0"
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
