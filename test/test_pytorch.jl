@@ -3,6 +3,7 @@ using PyCallChainRules.Torch: TorchModuleWrapper, torch, functorch, dlpack, pyto
 using Test
 using Zygote
 using Flux
+using FillArrays
 using ChainRulesCore: NoTangent, AbstractZero
 import Random
 using PyCall
@@ -131,4 +132,21 @@ end
 
     compare_grad_wrt_params(modelwrap, input)
     compare_grad_wrt_inputs(modelwrap, input)
+end
+
+@testset "cpu" begin
+    dev = torch.device("cpu")
+    indim = 32
+    outdim = 16
+    torch_module = torch.nn.Linear(indim, outdim).to(device=dev) # Can be anything subclassing torch.nn.Module
+    jlwrap = TorchModuleWrapper(torch_module)
+
+    batchsize = 64
+    input = randn(Float32, indim, batchsize)
+    output = jlwrap(input)
+
+    target = randn(Float32, outdim, batchsize)
+    loss(m, x, y) = sum(m(x) .- target)
+    grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
+    @test grad.params !== nothing
 end
