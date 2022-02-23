@@ -9,7 +9,7 @@ import Adapt
 struct PyAdaptor{T} end
 Adapt.adapt_storage(to::PyAdaptor{T}, x::AbstractArray) where {T} = convert(Array, x)
 Adapt.adapt_storage(to::PyAdaptor{T}, x::StridedArray) where {T} = x
-Adapt.adapt_storage(to::PyAdaptor{T}, x::FillArrays.AbstractFill) where {T} = collect(x)
+Adapt.adapt_storage(to::PyAdaptor{<:AbstractArray}, x::FillArrays.AbstractFill) = collect(x)
 
 
 
