@@ -94,7 +94,6 @@ function __init__()
     catch err
         @warn """PyCallChainRules.jl has failed to import torch and functorch from Python.
                  Please make sure these are installed. 
-                 methods of this package.
         """
         @debug err
         ispysetup[] = false
