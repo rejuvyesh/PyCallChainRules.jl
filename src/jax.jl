@@ -3,7 +3,7 @@ module Jax
 using PyCall
 using ChainRulesCore
 using DLPack
-using Functors: fmap
+import Functors: fmap
 using Adapt
 
 using ..PyCallChainRules: PyAdaptor
@@ -19,27 +19,30 @@ const ispysetup = Ref{Bool}(false)
 pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
 
+### XXX: what's a little piracy between us
+fmap(f, x::ChainRulesCore.Tangent) = fmap(f, x.backing)
+
 struct JaxFunctionWrapper
     jaxfn::PyObject
 end
 
 function (wrap::JaxFunctionWrapper)(args...; kwargs...)
-    # TODO: handle multiple outputs
-    out = (wrap.jaxfn(fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...))
-    return (DLPack.wrap(out, pyto_dlpack))
+    out = wrap.jaxfn(fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...)
+    return fmap(x->DLPack.wrap(x, pyto_dlpack), out)
 end
 
 function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...; kwargs...)
     T = typeof(first(args))
     project = ProjectTo(args)
-    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)...; kwargs...)
+    pyargs = fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), args)
+    jax_primal, jax_vjpfun = jax.vjp(wrap.jaxfn, pyargs...; kwargs...)
     function JaxFunctionWrapper_pullback(Δ)
-        cΔ = Adapt.adapt(PyAdaptor{T}(), Δ)
-        dlΔ = DLPack.share(cΔ, PyObject, pyfrom_dlpack)
-        tangent_vals = fmap(x->(DLPack.wrap(x, pyto_dlpack)), jax_vjpfun(dlΔ))
+        cΔ = fmap(x->Adapt.adapt(PyAdaptor{T}(), x), Δ)
+        dlΔ = fmap(x->DLPack.share(x, PyObject, pyfrom_dlpack), cΔ)
+        tangent_vals = fmap(x->DLPack.wrap(x, pyto_dlpack), jax_vjpfun(dlΔ))
         return (NoTangent(), project(tangent_vals)...)
     end
-    return (DLPack.wrap(jax_primal, pyto_dlpack)), JaxFunctionWrapper_pullback
+    return fmap(x->DLPack.wrap(x, pyto_dlpack), jax_primal), JaxFunctionWrapper_pullback
 end
 
 
