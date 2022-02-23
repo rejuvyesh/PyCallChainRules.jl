@@ -51,7 +51,7 @@ using PyCall
 # For CUDA 11
 run(`$(PyCall.pyprogramname) -m pip install --pre torch -f https://download.pytorch.org/whl/nightly/cu111/torch_nightly.html 
 --upgrade`)
-run(`$(PyCall.pyprgramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
+run(`$(PyCall.pyprogramname) -m pip install "git+https://github.com/pytorch/functorch.git"`)
 ```
 
 ##### Example
