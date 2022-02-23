@@ -4,6 +4,7 @@ using PyCall
 
 using ChainRulesCore
 using DLPack
+using FillArrays: AbstractFill
 using Functors: @functor
 using Adapt
 
@@ -67,6 +68,7 @@ function ChainRulesCore.rrule(wrap::TorchModuleWrapper, args...; kwargs...)
         args_tangents = project(map(x -> (DLPack.wrap(x, pyto_dlpack)), torch_tangent_vals[2:end]))
         return (Tangent{TorchModuleWrapper}(; torch_stateless_module = NoTangent(), dtype = NoTangent(), params = jlparams_tangents, buffers = NoTangent()), args_tangents...)
     end
+    TorchModuleWrapper_pullback(Δ::AbstractFill) = TorchModuleWrapper_pullback(collect(Δ))
     res = DLPack.wrap(torch_primal, pyto_dlpack)
     return res, TorchModuleWrapper_pullback
 end

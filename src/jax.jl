@@ -3,6 +3,7 @@ module Jax
 using PyCall
 using ChainRulesCore
 using DLPack
+using FillArrays: AbstractFill
 using Functors: fmap
 using Adapt
 
@@ -39,6 +40,7 @@ function ChainRulesCore.rrule(wrap::JaxFunctionWrapper, args...; kwargs...)
         tangent_vals = fmap(x->(DLPack.wrap(x, pyto_dlpack)), jax_vjpfun(dlΔ))
         return (NoTangent(), project(tangent_vals)...)
     end
+    JaxFunctionWrapper_pullback(Δ::AbstractFill) = JaxFunctionWrapper_pullback(collect(Δ))
     return (DLPack.wrap(jax_primal, pyto_dlpack)), JaxFunctionWrapper_pullback
 end
 
