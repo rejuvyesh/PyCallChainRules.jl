@@ -9,6 +9,7 @@ import Random
 using PyCall
 using CUDA
 using DLPack
+using Functors: fmap
 
 if !ispysetup[]
     return
@@ -22,7 +23,7 @@ end
 
 function compare_grad_wrt_params(modelwrap, inputs...)
     params = map(x -> DLPack.share(x, PyObject, pyfrom_dlpack).to(device = device, dtype = modelwrap.dtype).requires_grad_(true), (modelwrap.params))
-    torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, map(z->DLPack.share(z, PyObject, pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device), inputs)...).sum()
+    torch_out = modelwrap.torch_stateless_module(params, modelwrap.buffers, fmap(z->DLPack.share(z, PyObject, pyfrom_dlpack).to(dtype=modelwrap.dtype, device=device), inputs)...).sum()
     torchgrad = map(x-> (x.cpu().numpy()), torch.autograd.grad(torch_out, params))
     grad,  = Zygote.gradient(m->sum(m(inputs...)), modelwrap)
     @test length(torchgrad) == length(grad.params)
@@ -149,4 +150,31 @@ end
     loss(m, x, y) = sum(m(x) .- target)
     grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
     @test grad.params !== nothing
+end
+
+py"""
+import torch
+class CustomModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = torch.nn.Linear(16, 4)
+
+    def forward(self, x):
+        return self.lin(x.input)
+"""
+
+@testset "nametupleinput" begin
+    model = py"CustomModule"().to(device=device)
+    modelwrap = TorchModuleWrapper(model)
+    if CUDA.functional()
+        modelwrap = fmap(CUDA.cu, modelwrap)
+    end
+    in = randn(Float32, 16, batchsize)
+    if CUDA.functional()
+        in = cu(in)
+    end
+    x = (;input=in)
+    output = modelwrap(x)
+
+    compare_grad_wrt_params(modelwrap, x)
 end
