@@ -152,29 +152,50 @@ end
     @test grad.params !== nothing
 end
 
+
 py"""
 import torch
-class CustomModule(torch.nn.Module):
+class CustomModuleTupleout(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.lin = torch.nn.Linear(16, 4)
+        self.lin1 = torch.nn.Linear(16, 4)
+        self.lin2 = torch.nn.Linear(3, 4)
 
-    def forward(self, x):
-        return self.lin(x.input)
+    def forward(self, x, y):
+        return self.lin1(x), self.lin2(y)
 """
-
-@testset "nametupleinput" begin
-    model = py"CustomModule"().to(device=device)
+@testset "multi_io" begin
+    model = py"CustomModuleTupleout"().to(device=torch.device("cpu"))
     modelwrap = TorchModuleWrapper(model)
-    if CUDA.functional()
-        modelwrap = fmap(CUDA.cu, modelwrap)
-    end
-    in = randn(Float32, 16, batchsize)
-    if CUDA.functional()
-        in = cu(in)
-    end
-    x = (;input=in)
-    output = modelwrap(x)
 
-    compare_grad_wrt_params(modelwrap, x)
+    in1 = randn(Float32, 16, batchsize)
+    in2 = randn(Float32, 3, batchsize)
+    x = (in1, in2)
+    output = modelwrap(x...)
+    @test length(output) == 2
+    grad,  = Zygote.gradient(m->sum(sum(m(x...))), modelwrap)
+    @test grad.params !== nothing
 end
+
+# https://github.com/JuliaPy/PyCall.jl/issues/175
+# py"""
+# import torch
+# class CustomModule(torch.nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.lin = torch.nn.Linear(16, 4)
+
+#     def forward(self, x):
+#         return self.lin(x.input)
+# """
+
+# @testset "nametupleinput" begin
+#     model = py"CustomModule"().to(device=torch.device("cpu"))
+#     modelwrap = TorchModuleWrapper(model)
+
+#     in = randn(Float32, 16, batchsize)
+#     x = (;input=in)
+#     output = modelwrap(x)
+#     grad,  = Zygote.gradient(m->sum(m(x)), modelwrap)
+#     @show grad
+# end

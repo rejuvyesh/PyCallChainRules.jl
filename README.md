@@ -140,6 +140,7 @@ grad, = Zygote.gradient(p->loss(p, input, target), params_jl)
 ```
 
 
-## Current Limitations / TODO
+## Current Limitations
 
-- Assumes wrapped python functions are single output only
+- Input and output types of wrapped python functions can only be python tensors or [nested] tuples of python tensors.
+- Keyword arguments should not be arrays and do not support differentiation.
