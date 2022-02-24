@@ -3,10 +3,9 @@ module Jax
 using PyCall
 using ChainRulesCore
 using DLPack
-import Functors: fmap
 using Adapt
 
-using ..PyCallChainRules: PyAdaptor
+using ..PyCallChainRules: PyAdaptor, fmap
 
 const inspect = PyNULL()
 const jax = PyNULL()
@@ -19,8 +18,6 @@ const ispysetup = Ref{Bool}(false)
 pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
 
-### XXX: what's a little piracy between us
-fmap(f, x::ChainRulesCore.Tangent) = fmap(f, x.backing)
 
 struct JaxFunctionWrapper
     jaxfn::PyObject
@@ -57,7 +54,6 @@ function __init__()
     catch err
         @warn """PyCallChainRules.jl has failed to import jax from Python.
                  Please make sure these are installed. 
-                 methods of this package.
         """
         @debug err   
         ispysetup[] = false             
