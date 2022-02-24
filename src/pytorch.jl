@@ -5,10 +5,9 @@ using PyCall
 using ChainRulesCore
 using DLPack
 using Functors: @functor
-import Functors: fmap
 using Adapt
 
-using ..PyCallChainRules: PyAdaptor
+using ..PyCallChainRules: PyAdaptor, fmap
 
 const inspect = PyNULL()
 const torch = PyNULL()
@@ -19,8 +18,6 @@ const ispysetup = Ref{Bool}(false)
 pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
 
-### XXX: what's a little piracy between us
-fmap(f, x::ChainRulesCore.Tangent) = fmap(f, x.backing)
 
 struct TorchModuleWrapper
     torch_stateless_module::PyObject
