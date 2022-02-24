@@ -7,6 +7,8 @@ using BenchmarkTools
 using Zygote
 using PyCallChainRules.Torch.PyCall
 
+using CUDA
+
 if !ispysetup[]
     return
 end
@@ -41,26 +43,25 @@ def bn2group(module):
 
 include("pytorch_utils.jl")
 
-batchsizes = [1, 8, 16, 32]
-indim = 8
-outdim = 4
-hiddendim = 64
+batchsizes = [1, ]
 
 suite = BenchmarkGroup()
 
-for batchsize in batchsizes
-    model = torch.hub.load("pytorch/vision", "resnet18", pretrained=true)
-    model_gn = py"bn2group"(model)
+for device in ["cpu", "cuda"]
+    ss = suite["$device"] = BenchmarkGroup()
+    for batchsize in batchsizes
+        model = torch.hub.load("pytorch/vision", "resnet18", pretrained=true)
+        model_gn = py"bn2group"(model)
 
-    s = suite["bs=$batchsize"] = BenchmarkGroup()
-    # Forward pass
-    s["forward"] = BenchmarkGroup()
-    forward_pass!(s["forward"], model_gn, randn(Float32, 3, 224, 224), batchsize; samples=20)
+        s = ss["bs=$batchsize"] = BenchmarkGroup()
+        # Forward pass
+        s["forward"] = BenchmarkGroup()
+        forward_pass!(s["forward"], model_gn, randn(Float32, 3, 224, 224), batchsize, device; samples=20)
 
-    # Gradient pass
-    s["backward"] = BenchmarkGroup()    
-    b2 = backward_pass!(s["backward"], model_gn, randn(Float32, 3, 224, 224), batchsize; samples=20)
+        # Gradient pass
+        s["backward"] = BenchmarkGroup()    
+        b2 = backward_pass!(s["backward"], model_gn, randn(Float32, 3, 224, 224), batchsize, device; samples=20)
+    end
 end
 end
-
 TorchHub.suite

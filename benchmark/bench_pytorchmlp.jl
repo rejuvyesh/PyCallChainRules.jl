@@ -6,6 +6,8 @@ using BenchmarkTools
 
 using Zygote
 
+using CUDA
+
 if !ispysetup[]
     return
 end
@@ -19,19 +21,39 @@ hiddendim = 64
 
 suite = BenchmarkGroup()
 
-for batchsize in batchsizes
-    mlp = torch.nn.Sequential(torch.nn.Linear(indim, hiddendim), torch.nn.ReLU(), torch.nn.Linear(hiddendim, outdim))
+for device in ["cpu"]
+    ss = suite["$device"] = BenchmarkGroup()
+    for batchsize in batchsizes
+        mlp = torch.nn.Sequential(torch.nn.Linear(indim, hiddendim), torch.nn.ReLU(), torch.nn.Linear(hiddendim, outdim))
 
-    s = suite["bs=$batchsize"] = BenchmarkGroup()
-    # Forward pass
-    s["forward"] = BenchmarkGroup()
-    forward_pass!(s["forward"], mlp, randn(Float32, indim), batchsize)
+        s = ss["bs=$batchsize"] = BenchmarkGroup()
+        # Forward pass
+        s["forward"] = BenchmarkGroup()
+        forward_pass!(s["forward"], mlp, randn(Float32, indim), batchsize, device)
 
-    # Gradient pass
-    s["backward"] = BenchmarkGroup()
-    backward_pass!(s["backward"], mlp, randn(Float32, indim), batchsize)
+        # Gradient pass
+        s["backward"] = BenchmarkGroup()
+        backward_pass!(s["backward"], mlp, randn(Float32, indim), batchsize, device)
+    end
 end
+
+for device in ["cuda"]
+    ss = suite["$device"] = BenchmarkGroup()
+    for batchsize in batchsizes
+        mlp = torch.nn.Sequential(torch.nn.Linear(indim, hiddendim), torch.nn.ReLU(), torch.nn.Linear(hiddendim, outdim))
+
+        s = ss["bs=$batchsize"] = BenchmarkGroup()
+        # Forward pass
+        s["forward"] = BenchmarkGroup()
+        forward_pass!(s["forward"], mlp, randn(Float32, indim), batchsize, device)
+
+        # Gradient pass
+        s["backward"] = BenchmarkGroup()
+        backward_pass!(s["backward"], mlp, randn(Float32, indim), batchsize, device)
+    end
 end
 
+
+end
 TorchMLP.suite
 
