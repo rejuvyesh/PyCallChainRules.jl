@@ -18,8 +18,7 @@ Thanks to [@pabloferz](https://github.cim/pabloferz), this works on both CPU and
 
 ```julia
 using PyCall
-run(`$(PyCall.pyprogramname) -m pip install torch==1.11.0+cpu -f https://download.pytorch.org/whl/cpu/torch_stable.html`)
-run(`$(PyCall.pyprogramname) -m pip install functorch`)
+run(`$(PyCall.pyprogramname) -m pip install torch==1.11.0+cpu -f https://download.pytorch.org/whl/cpu/torch_stable.html functorch`)
 ```
 
 ##### Example
@@ -49,8 +48,7 @@ grad, = Zygote.gradient(m->loss(m, input, target), jlwrap)
 ```julia
 using PyCall
 # For CUDA 11 and PyTorch 1.11
-run(`$(PyCall.pyprogramname) -m pip install torch==1.11.0+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html`)
-run(`$(PyCall.pyprogramname) -m pip install functorch`)
+run(`$(PyCall.pyprogramname) -m pip install torch==1.11.0+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html functorch`)
 ```
 
 ##### Example
