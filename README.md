@@ -60,7 +60,7 @@ using CUDA
 using PyCallChainRules.Torch: TorchModuleWrapper, torch
 using Zygote
 
-@assert CUDA.isfunctional()
+@assert CUDA.functional()
 
 indim = 32
 outdim = 16
