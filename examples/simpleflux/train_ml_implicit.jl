@@ -14,19 +14,24 @@ torch_module = torch.nn.Sequential(
                         )
 jlmodel = TorchModuleWrapper(torch_module)
 
-opt = Flux.ADAM(0.1)
-
 input = randn(Float32, input_dim, batchsize)
 target = randn(Float32, output_dim, batchsize)
 
 loss(x, y) = Flux.Losses.mse(jlmodel(x), y)
-ps = Flux.params(jlmodel)
-@info "before" map(sum, ps)
-for i in 1:1
-    gs = Flux.gradient(ps) do 
-        loss(input, target)
+@info "before" loss(input, target)
+
+function train(model; nsteps=100)
+    opt = Flux.ADAM(0.01)
+    ps = Flux.Zygote.Params(Flux.params(model))
+    for i in 1:nsteps
+        gs = Flux.Zygote.gradient(ps) do 
+            loss(input, target)
+        end
+        Flux.Optimise.update!(opt, ps, gs)
     end
-    @show gs.grads
-    Flux.Optimise.update!(opt, ps, gs)
+    return model
 end
-@info "after" map(sum, ps)
+
+jlmodel = train(jlmodel)
+
+@info "after" loss(input, target)
