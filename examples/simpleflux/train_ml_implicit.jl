@@ -1,6 +1,10 @@
 using Flux
 using PyCallChainRules.Torch: TorchModuleWrapper, torch
 
+###
+# WARNING: Doesn't work correctly yet.
+###
+
 input_dim = 4
 output_dim = 2
 hiddendim = 16
@@ -24,7 +28,7 @@ function train(model; nsteps=100)
     opt = Flux.ADAM(0.01)
     ps = Flux.Zygote.Params(Flux.params(model))
     for i in 1:nsteps
-        gs = Flux.Zygote.gradient(ps) do 
+        gs, = Flux.Zygote.gradient(ps) do 
             loss(input, target)
         end
         Flux.Optimise.update!(opt, ps, gs)
