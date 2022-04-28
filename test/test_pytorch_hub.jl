@@ -14,42 +14,17 @@ if !ispysetup[]
     return
 end
 
+fexp = pyimport("functorch.experimental")
+
 if CUDA.functional()
     device = torch.device("cuda:0")
 else
     device = torch.device("cpu")
 end
 
-py"""
-import torch
-def bn2group(module):
-    num_groups = 16 # hyper_parameter of GroupNorm
-    module_output = module
-    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
-        module_output = torch.nn.GroupNorm(num_groups,
-                                           module.num_features,
-                                           module.eps, 
-                                           module.affine,
-                                          )
-        if module.affine:
-            with torch.no_grad():
-                module_output.weight = module.weight
-                module_output.bias = module.bias
-        module_output.running_mean = module.running_mean
-        module_output.running_var = module.running_var
-        module_output.num_batches_tracked = module.num_batches_tracked
-        if hasattr(module, "qconfig"):
-            module_output.qconfig = module.qconfig
-
-    for name, child in module.named_children():
-        module_output.add_module(name, bn2group(child))
-
-    del module
-    return module_output
-"""
 
 model = torch.hub.load("pytorch/vision", "resnet18", pretrained=true)
-model_gn = py"bn2group"(model).to(device=device)
+model_gn = fexp.replace_all_batch_norm_modules_(model).to(device=device)
 modelwrap = TorchModuleWrapper(model_gn)
 if CUDA.functional()
     modelwrap = fmap(CUDA.cu, modelwrap)
