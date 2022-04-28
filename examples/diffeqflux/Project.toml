@@ -8,3 +8,7 @@ PyCallChainRules = "b12ccfe2-7326-416f-9f4f-cd3183bd9fe8"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
+
+[compat]
+Flux = "0.13"
+DiffEqFlux = "1.46"
