@@ -4,6 +4,7 @@ using PyCall
 using ChainRulesCore
 using DLPack
 using Adapt
+using Requires
 
 using ..PyCallChainRules: PyAdaptor, fmap
 
@@ -17,6 +18,11 @@ const ispysetup = Ref{Bool}(false)
 
 pyto_dlpack(x) = @pycall dlpack.to_dlpack(x)::PyObject
 pyfrom_dlpack(x) = @pycall dlpack.from_dlpack(x)::PyObject
+
+### XXX: what's a little piracy between us
+### allows empty parameter tuples
+DLPack.wrap(o::Tuple{}, to_dlpack) = o
+DLPack.share(o::Tuple{}, ::Type{PyObject}, from_dlpack) = o
 
 
 struct JaxFunctionWrapper
@@ -58,6 +64,9 @@ function __init__()
         @debug err   
         ispysetup[] = false             
         #rethrow(err)
+    end
+    @require Lux = "b2108857-7c20-44ae-9111-449ecde12c47" begin
+        include("lux.jl")
     end
 end
 
