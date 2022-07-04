@@ -26,7 +26,7 @@ jax_init_fun, jax_apply_fun = stax.serial(stax.Dense(hiddendim), stax.Relu,
 # Mix of Lux layers and Jax stax layers
 # Note: Lux's optimization don't play well
 jlmodel = Chain(Dense(input_dim, input_dim, Lux.relu), 
-                LuxJaxWrapper(jax_init_fun, (jax_apply_fun); input_shape=(batchsize, input_dim)), 
+                LuxJaxWrapper(jax_init_fun, jax.jit(jax_apply_fun); input_shape=(batchsize, input_dim)), 
                 Dense(output_dim, output_dim); disable_optimizations=true)
 
 
