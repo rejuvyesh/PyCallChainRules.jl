@@ -19,7 +19,7 @@ function LuxJaxWrapper(init::PyObject, apply::PyObject; input_shape::NTuple{N,In
 end
 
 function Lux.initialparameters(rng::AbstractRNG, l::LuxJaxWrapper)
-    val = rand(rng, Int32)
+    val = abs(rand(rng, Int32))
     _, params = l.initfn(jax.random.PRNGKey(val), l.input_shape)
     params_jl = fmap(x->DLPack.wrap(x, pyto_dlpack), params)
     return params_jl
