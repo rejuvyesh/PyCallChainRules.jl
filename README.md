@@ -136,6 +136,7 @@ loss(p, x, y) = sum(jlwrap(p, x) .- y)
 grad, = Zygote.gradient(p->loss(p, input, target), params_jl)
 ```
 
+When mixing `jax` and `julia` it's recommended to disable `jax`'s preallocation with settign the environment variable `XLA_PYTHON_CLIENT_PREALLOCATE=false`.
 
 ## Current Limitations
 
