@@ -1,7 +1,7 @@
 using Lux
 using Optimisers
 using Random
-using PyCallChainRules.Jax: LuxJaxWrapper, jax, stax
+using PyCallChainRules.Jax: LuxStaxWrapper, jax, stax
 using Zygote
 
 input_dim = 4
@@ -13,7 +13,7 @@ jax_init_fun, jax_apply_fun = stax.serial(stax.Dense(hiddendim), stax.Relu,
                                         stax.Dense(hiddendim), stax.Relu, 
                                         stax.Dense(output_dim))
 
-jlmodel = LuxJaxWrapper(jax_init_fun, jax.jit(jax_apply_fun); input_shape=(-1, input_dim))
+jlmodel = LuxStaxWrapper(jax_init_fun, jax.jit(jax_apply_fun); input_shape=(-1, input_dim))
 
 rng = Random.default_rng()
 
