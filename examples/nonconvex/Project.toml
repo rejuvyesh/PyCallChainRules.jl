@@ -1,0 +1,5 @@
+[deps]
+Nonconvex = "01bcebdf-4d21-426d-b5c4-6132c1619978"
+NonconvexIpopt = "bf347577-a06d-49ad-a669-8c0e005493b8"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+PyCallChainRules = "b12ccfe2-7326-416f-9f4f-cd3183bd9fe8"
