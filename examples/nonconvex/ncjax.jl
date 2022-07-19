@@ -84,7 +84,7 @@ x0 = vec(rand(5, T))
 
 model = Model(objective)
 # add variable to optimize
-addvar!(model, -100*ones(size(x)), ones(size(x))*100)
+addvar!(model, -100*ones(size(x0)), ones(size(x0))*100)
 alg = IpoptAlg()
 options = IpoptOptions(first_order=true)
 result = optimize(model, alg, x0, options=options)
